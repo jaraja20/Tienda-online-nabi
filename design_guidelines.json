@@ -1,0 +1,111 @@
+{
+  "project_name": "Nabimen E-Commerce & Admin Panel",
+  "theme_archetype": {
+    "storefront": "Archetype 4: Swiss & High-Contrast (Light Theme) - Clean canvas for streetwear apparel, high-contrast typography, electric indigo accents.",
+    "admin": "Archetype 2: Performance Pro (Dark Theme) - Dense data, dark-first, minimal visual noise for backend operational management."
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Outfit",
+      "body": "Manrope"
+    },
+    "rules": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "body": "text-base leading-relaxed font-medium",
+      "labels": "text-xs tracking-[0.2em] uppercase font-bold"
+    }
+  },
+  "colors": {
+    "storefront": {
+      "background": "#FFFFFF",
+      "surface": "#FAFAFA",
+      "surface_alt": "#F4F4F5",
+      "text_primary": "#0A0A0A",
+      "text_secondary": "#52525B",
+      "accent": "#4338CA",
+      "accent_hover": "#3730A3",
+      "border": "#E4E4E7"
+    },
+    "admin": {
+      "background": "#09090B",
+      "surface": "#18181B",
+      "surface_alt": "#27272A",
+      "text_primary": "#FAFAFA",
+      "text_secondary": "#A1A1AA",
+      "accent": "#4338CA",
+      "accent_hover": "#4F46E5",
+      "border": "#27272A",
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "danger": "#EF4444"
+    }
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "Generous on storefront (p-8, p-12), dense on admin (p-4, p-6).",
+    "storefront_grid": "Bento grid for hero/lookbook sections (Tetris mode), 4-column Shein-style minimal grid for product catalog.",
+    "admin_grid": "Control Room grid. Dense sidebar + header + 3-4 column widget grid. Use grid borders to expose technical skeleton.",
+    "border_radius": "Sharp edges (rounded-none) or very subtle (rounded-sm) to fit the edgy streetwear aesthetic."
+  },
+  "components": {
+    "navigation": "Sticky white header with crystal glassmorphism (backdrop-blur-xl bg-white/80). Logo left, Categories center (hidden on mobile), Actions right (Search, Favorites, Cart).",
+    "logo": "Text-based HTML composition: bold black 'NABI' + star icon + 'MEN' in text-[#4338CA] on the bottom row. No image placeholder.",
+    "product_card": "Minimalist. Image takes 80% height with group-hover:scale-105 transition. Information below: Brand, Title, Price in PYG, minimal 'Add to Cart' / 'Favorite' icon overlays on image.",
+    "product_detail_modal": "Half-and-half layout. Left: Image carousel. Right: Sticky details, Size/Color pill selectors, big sticky 'Add to Cart' button.",
+    "cart_sidebar": "Shadcn Sheet component. Shows items, subtotal, and heavy 'Checkout via WhatsApp' button. Form asks for Name & Location before redirect.",
+    "admin_sidebar": "Dark slate sidebar, active state highlighted with 1px border and glowing left border (tracing beam).",
+    "admin_tables": "Shadcn tables. High contrast text. Use badges for order states (En proceso, Pagado parcialmente, etc.).",
+    "file_manager": "Windows-explorer style grid. Folder icons, drag-and-drop zone using standard div+events or react-dropzone. Breadcrumb navigation."
+  },
+  "motion_and_interaction": {
+    "hover_states": "Images zoom slightly (scale-105). Buttons invert colors or show soft drop-shadow.",
+    "page_transitions": "Smooth scrolling via Lenis. Staggered fade-up for product grids.",
+    "micro_interactions": "Heart icon fill animation when favorited."
+  },
+  "media": {
+    "image_urls": {
+      "hero_main": {
+        "url": "https://images.unsplash.com/photo-1576775068668-c147f14c36f7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwzfHx1cmJhbiUyMHN0cmVldHdlYXIlMjBtb2RlbHxlbnwwfHx8fDE3Nzk3NjQ2MDZ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Urban streetwear model for hero lookbook"
+      },
+      "hero_secondary": {
+        "url": "https://images.pexels.com/photos/29548609/pexels-photo-29548609.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Stylish woman in urban street for secondary bento box"
+      },
+      "product_shoes_1": {
+        "url": "https://images.unsplash.com/photo-1556906781-9a412961c28c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwxfHxzdHJlZXR3ZWFyJTIwc25lYWtlcnN8ZW58MHx8fHwxNzc5NzY0NjA2fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Sneakers (Championes)"
+      },
+      "product_shoes_2": {
+        "url": "https://images.unsplash.com/photo-1595341888016-a392ef81b7de?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwzfHxzdHJlZXR3ZWFyJTIwc25lYWtlcnN8ZW58MHx8fHwxNzc5NzY0NjA2fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Sneakers 2"
+      },
+      "product_watch": {
+        "url": "https://images.unsplash.com/photo-1525740664269-1bb17f251737?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjB3YXRjaCUyMGZhc2hpb258ZW58MHx8fHwxNzc5NzY0NjA2fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Modern watch (Relojes)"
+      },
+      "product_shirt": {
+        "url": "https://images.unsplash.com/photo-1571945153237-4929e783af4a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwzfHxtZW5zJTIwc3RyZWV0d2VhciUyMHQtc2hpcnR8ZW58MHx8fHwxNzc5NzY0NjIxfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Streetwear t-shirt (Remeras)"
+      },
+      "product_pants": {
+        "url": "https://images.unsplash.com/photo-1623596305214-19f21cbf48ee?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxtZW5zJTIwc3RyZWV0d2VhciUyMHBhbnRzfGVufDB8fHx8MTc3OTc2NDYyMnww&ixlib=rb-4.1.0&q=85",
+        "description": "Streetwear pants (Pantalones)"
+      },
+      "product_accessory": {
+        "url": "https://images.pexels.com/photos/16039231/pexels-photo-16039231.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Streetwear accessory"
+      }
+    }
+  },
+  "instructions_to_main_agent": [
+    "Build the storefront and admin panel as completely separate layout wrappers to easily manage the Light/Dark theme division.",
+    "Do NOT use generic placeholders (like via.placeholder.com). Use the provided image_urls for seeding the products grid.",
+    "Ensure all buttons, form inputs, and key interactive elements have 'data-testid' attributes in kebab-case (e.g. data-testid='add-to-cart-btn').",
+    "For the custom WhatsApp checkout: calculate the cart total in Guaranies (PYG) based on a mockup exchange rate (or state context), show a form for User Name and Location (CDE/Others), and generate a wa.me URL with pre-filled text.",
+    "Admin Dashboard: Implement a dummy dark-mode UI with a sidebar. Show Products, Orders (with states: en proceso, pagado parcialmente, en envío, arribado, completado, cancelado), Files (Windows-explorer look), and Dashboard (charts using Recharts).",
+    "Files Manager: Use a grid of folder/file icons. Make it look like a web-based Windows explorer.",
+    "Use Phosphor icons (@phosphor-icons/react) or Lucide (lucide-react) for a clean, sharp look across the app."
+  ]
+}
