@@ -768,6 +768,8 @@ async def files_list(path: str = "/", user=Depends(require_admin)):
 @api.post("/files/mkdir")
 async def files_mkdir(path: str = Form(...), name: str = Form(...), user=Depends(require_admin)):
     target = safe_join(UPLOAD_DIR, path.lstrip("/"), name)
+    if target.exists():
+        raise HTTPException(400, "La carpeta ya existe")
     target.mkdir(parents=True, exist_ok=False)
     return {"ok": True}
 
