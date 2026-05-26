@@ -1,0 +1,43 @@
+{
+  "summary": "Full end-to-end testing of NABI MEN reseller storefront. Backend: 27/27 pytest tests passing covering auth, products (price formula validation), categories, tags, settings, orders state machine, dashboard stats, files (upload, ZIP extract, traversal blocking). Frontend: storefront loads with logo, hero, 7 seeded products, category filter chip works, sort_select works, product modal opens, add-to-cart and cart sheet work, WhatsApp checkout creates order (POST /api/orders) and opens wa.me tab, favorites flow works. Admin: login with admin/Eljaraja20% redirects to /admin/dashboard, all 6 sidebar nav items work (products, categories, tags, orders, files, exchange), exchange rate update + save works, new product creation through admin form works and persists. No critical bugs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/files/mkdir", "issue": "FileExistsError not caught — if folder already exists returns 500 instead of 400 (re-create same name). Edge case."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "FavoritesSheet", "issue": "Sheet panel (right-0, w-full max-w-md) appears to extend beyond viewport boundary when opened at 1920px in some cases; Playwright reports close-favorites-btn as 'outside of the viewport' although visually visible. May indicate horizontal overflow on body when sheet is open.", "selector": "[data-testid=\"close-favorites-btn\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin panel", "issues": ["Toast notifications stack and overlay top-right area near the 'Nuevo producto' button — could intercept clicks in real usage; recommend auto-dismiss or repositioning."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_nabimen_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) catch FileExistsError on POST /api/files/mkdir and return 400 with a friendly message",
+    "(Optional) investigate FavoritesSheet horizontal overflow at >1024px viewport — sheet sometimes extends past body width"
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~900 lines — consider splitting into routers (auth.py, products.py, orders.py, files.py) before further feature growth",
+    "CORS allow_origins=['*'] with allow_credentials=False — acceptable for current public storefront, but restrict origins before production",
+    "compute_price uses round(...*rate/1000)*1000 — verified consistent across all 7 sample products and settings update test",
+    "ORDER_STATES whitelist enforced server-side (400 on invalid status) — good",
+    "safe_join() correctly prevents path traversal (tested with name='../etc' → 400)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_nabimen_api.py"
+  ],
+  "success_rate": {"backend": "100% (27/27)", "frontend": "~95% (all critical flows passing)"},
+  "test_credentials": "admin / Eljaraja20% — confirmed working",
+  "seed_data_creation": "Backend auto-seeds 7 categories, 3 tag groups, 18 tags, 7 sample products on startup. Each test uses TEST_ prefix and cleans up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_nabimen_api.py (pytest). Run with: pytest /app/backend/tests/test_nabimen_api.py -v. All admin endpoints require Bearer token. Public POST /api/orders works without auth. WhatsApp number is 595986616939. Default exchange rate is 7800 but currently 7000 in DB (was changed during prior testing). Admin sidebar nav uses route names: dashboard|products|categories|tags|orders|files|exchange (NOT spanish names).",
+  "rca of the issue": "N/A — no blocking issues. Single test bug in initial pytest run (variable unpacking error in test_order_arribado_with_shipping using `oid, p = created_order` instead of `order, p = created_order; oid = order['id']`) was identified and fixed; all 27 tests now pass."
+}
