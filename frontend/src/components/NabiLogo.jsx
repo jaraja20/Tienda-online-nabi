@@ -1,16 +1,25 @@
 import React from "react";
 
-export function NabiLogo({ size = "md", className = "" }) {
-  const sizes = {
-    sm: "text-2xl",
-    md: "text-3xl",
-    lg: "text-5xl",
-    xl: "text-7xl",
+/**
+ * Logo NABI MEN — usa la imagen real del usuario.
+ * variant: "light" (sobre fondo claro/blanco) | "dark" (sobre fondo oscuro/admin)
+ * size: sm | md | lg | xl
+ */
+export function NabiLogo({ variant = "light", size = "md", className = "" }) {
+  const heights = {
+    sm: "h-7",
+    md: "h-10",
+    lg: "h-16",
+    xl: "h-24",
   };
+  const src = variant === "dark" ? "/logo-nabimen-white.png" : "/logo-nabimen-transparent.png";
   return (
-    <div className={`brand-logo ${sizes[size] || sizes.md} ${className}`} data-testid="brand-logo">
-      <span className="text-ink">NABI</span>
-      <span className="men">MEN</span>
-    </div>
+    <img
+      src={src}
+      alt="NABI MEN"
+      className={`${heights[size] || heights.md} w-auto object-contain select-none ${className}`}
+      draggable={false}
+      data-testid="brand-logo"
+    />
   );
 }

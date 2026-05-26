@@ -4,7 +4,8 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        display: ["Outfit", "ui-sans-serif", "system-ui"],
+        display: ["Anton", "Outfit", "ui-sans-serif", "system-ui"],
+        outfit: ["Outfit", "ui-sans-serif", "system-ui"],
         body: ["Manrope", "ui-sans-serif", "system-ui"],
       },
       colors: {

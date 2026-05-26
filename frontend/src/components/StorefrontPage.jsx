@@ -81,9 +81,9 @@ export default function StorefrontPage() {
                 <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-nabi-200 mb-2">
                   Drop · Streetwear by encargo
                 </div>
-                <h1 className="font-display font-black tracking-tighter text-4xl sm:text-5xl lg:text-6xl leading-[0.9]">
+                <h1 className="font-display tracking-tight text-5xl sm:text-6xl lg:text-7xl leading-[0.92] uppercase">
                   Pedí tu Shein.<br />
-                  Recibí estilo en CDE.
+                  <span className="text-nabi-300">Recibí estilo en CDE.</span>
                 </h1>
                 <p className="mt-3 text-sm text-zinc-200 max-w-md">
                   Championes, relojes, remeras y accesorios traídos por encargo. 50% de seña, 2–3 semanas, calidad garantizada.
@@ -93,7 +93,7 @@ export default function StorefrontPage() {
 
             <div className="lg:col-span-5 grid grid-rows-2 gap-6">
               <div className="bg-ink text-white p-8 lg:p-10 flex flex-col justify-between">
-                <NabiLogo size="xl" className="text-white" />
+                <NabiLogo size="xl" variant="dark" />
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.3em] text-nabi-300 font-bold mb-2">Conexión directa</div>
                   <p className="text-sm text-zinc-300 leading-relaxed max-w-xs">

@@ -836,6 +836,139 @@ async def files_rename(old_path: str = Form(...), new_name: str = Form(...), use
     return {"ok": True, "path": "/" + rel}
 
 
+@api.post("/products/import-from-folder")
+async def import_from_folder(
+    folder_path: str = Form(...),
+    category_id: Optional[str] = Form(None),
+    default_cost_usd: float = Form(15),
+    default_profit_pct: float = Form(45),
+    use_subfolder_as_category: bool = Form(False),
+    user=Depends(require_admin),
+):
+    """
+    Auto-import products from a folder structure.
+    Folder structure expected: <folder_path>/<category>/<product_code>/{photos + descripcion.txt}
+    OR if use_subfolder_as_category=false: <folder_path>/<product>/{photos + descripcion.txt}
+    Each product folder becomes one product. descripcion.txt is used as name+description.
+    """
+    target = safe_join(UPLOAD_DIR, folder_path.lstrip("/"))
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(404, "Carpeta no encontrada")
+
+    cats_by_slug = {c["slug"]: c["id"] async for c in db.categories.find({})}
+    cats_by_name = {c["name"].lower(): c["id"] async for c in db.categories.find({})}
+
+    created = []
+    skipped = []
+
+    if use_subfolder_as_category:
+        # Two-level: /folder/<category>/<product>/
+        for cat_dir in sorted(target.iterdir()):
+            if not cat_dir.is_dir():
+                continue
+            cat_name = cat_dir.name
+            cat_id = cats_by_slug.get(slugify(cat_name)) or cats_by_name.get(cat_name.lower())
+            if not cat_id:
+                # Create category
+                new_cat = {
+                    "id": str(uuid.uuid4()), "name": cat_name, "slug": slugify(cat_name),
+                    "icon": None, "order": 99, "created_at": now_iso(),
+                }
+                await db.categories.insert_one(new_cat)
+                cat_id = new_cat["id"]
+                cats_by_slug[new_cat["slug"]] = cat_id
+
+            for prod_dir in sorted(cat_dir.iterdir()):
+                if not prod_dir.is_dir():
+                    continue
+                res = await _import_one_product(
+                    prod_dir, cat_id, default_cost_usd, default_profit_pct
+                )
+                if res:
+                    if isinstance(res, list):
+                        created.extend(res)
+                    else:
+                        created.append(res)
+                else:
+                    skipped.append(prod_dir.name)
+    else:
+        for prod_dir in sorted(target.iterdir()):
+            if not prod_dir.is_dir():
+                continue
+            res = await _import_one_product(
+                prod_dir, category_id, default_cost_usd, default_profit_pct
+            )
+            if res:
+                if isinstance(res, list):
+                    created.extend(res)
+                else:
+                    created.append(res)
+            else:
+                skipped.append(prod_dir.name)
+
+    return {"created": created, "skipped": skipped, "count": len(created)}
+
+
+async def _import_one_product(prod_dir: Path, category_id, default_cost_usd, default_profit_pct, brand: Optional[str] = None):
+    photos = sorted([
+        f"/api/uploads/{p.relative_to(UPLOAD_DIR).as_posix()}"
+        for p in prod_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    ])
+
+    # If no direct photos, but has subfolders → treat each subfolder as a product (current dir = brand)
+    if not photos:
+        subdirs = [p for p in prod_dir.iterdir() if p.is_dir()]
+        if subdirs:
+            results = []
+            for sub in sorted(subdirs):
+                res = await _import_one_product(sub, category_id, default_cost_usd, default_profit_pct, brand=prod_dir.name)
+                if res:
+                    if isinstance(res, list):
+                        results.extend(res)
+                    else:
+                        results.append(res)
+            return results if results else None
+        return None
+
+    # Read description
+    desc = ""
+    desc_path = prod_dir / "descripcion.txt"
+    if desc_path.exists():
+        try:
+            desc = desc_path.read_text(encoding="utf-8", errors="ignore").strip()
+        except Exception:
+            desc = ""
+
+    folder_name = prod_dir.name
+    name = (desc.split("\n")[0][:80] if desc else folder_name).strip() or folder_name
+    code = folder_name[:30]
+
+    existing = await db.products.find_one({"code": code})
+    if existing:
+        return None
+
+    product = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "description": desc,
+        "code": code,
+        "category_id": category_id,
+        "brand": brand,
+        "cost_usd": float(default_cost_usd),
+        "profit_pct": float(default_profit_pct),
+        "photos": photos,
+        "tag_ids": [],
+        "variants": [],
+        "featured": False,
+        "active": True,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.products.insert_one(product)
+    return {"id": product["id"], "name": product["name"], "photos": len(photos)}
+
+
 # ---------------- Dashboard ----------------
 @api.get("/dashboard/stats")
 async def dashboard_stats(user=Depends(require_admin)):

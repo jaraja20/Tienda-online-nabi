@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { api, fileUrl } from "../../lib/api";
 import { useApp } from "../../context/AppContext";
 import { PageHeader, Btn, Input, Select, Label, Card, Modal, Textarea } from "./AdminUI";
+import FilePickerModal from "./FilePickerModal";
 import { formatPYG } from "../../lib/utils";
-import { Plus, Trash2, Pencil, Image as ImageIcon, X, Upload, Star, StarOff } from "lucide-react";
+import { Plus, Trash2, Pencil, Image as ImageIcon, X, Upload, Star, FolderInput, FolderOpen } from "lucide-react";
 import toast from "react-hot-toast";
 
 const blank = () => ({
@@ -18,6 +19,7 @@ export default function ProductsPanel() {
   const [q, setQ] = useState("");
   const [catFilter, setCatFilter] = useState("");
   const [editing, setEditing] = useState(null);
+  const [showImport, setShowImport] = useState(false);
 
   const load = async () => {
     const r = await api.get("/products", { params: { admin: true } });
@@ -63,7 +65,16 @@ export default function ProductsPanel() {
       <PageHeader
         title="Productos"
         subtitle={`${items.length} productos · tasa ₲ ${rate.toLocaleString("es-PY")}/USD`}
-        actions={<Btn onClick={() => setEditing(blank())} data-testid="new-product-btn"><Plus className="w-3 h-3 inline mr-1"/>Nuevo producto</Btn>}
+        actions={
+          <>
+            <Btn variant="ghost" onClick={() => setShowImport(true)} data-testid="bulk-import-btn">
+              <FolderInput className="w-3 h-3 inline mr-1"/>Importar desde carpeta
+            </Btn>
+            <Btn onClick={() => setEditing(blank())} data-testid="new-product-btn">
+              <Plus className="w-3 h-3 inline mr-1"/>Nuevo producto
+            </Btn>
+          </>
+        }
       />
 
       <div className="flex flex-wrap gap-3 mb-4">
@@ -141,7 +152,103 @@ export default function ProductsPanel() {
           onSave={onSave}
         />
       )}
+
+      {showImport && (
+        <ImportFromFolderModal
+          categories={categories}
+          onClose={() => setShowImport(false)}
+          onDone={async () => { setShowImport(false); await load(); await refreshProducts(true); }}
+        />
+      )}
     </div>
+  );
+}
+
+function ImportFromFolderModal({ categories, onClose, onDone }) {
+  const [folderPath, setFolderPath] = useState("/Nabimen");
+  const [useSubfolder, setUseSubfolder] = useState(true);
+  const [categoryId, setCategoryId] = useState("");
+  const [cost, setCost] = useState(15);
+  const [profit, setProfit] = useState(45);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const submit = async () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("folder_path", folderPath);
+      fd.append("use_subfolder_as_category", useSubfolder ? "true" : "false");
+      if (!useSubfolder && categoryId) fd.append("category_id", categoryId);
+      fd.append("default_cost_usd", String(cost));
+      fd.append("default_profit_pct", String(profit));
+      const r = await api.post("/products/import-from-folder", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setResult(r.data);
+      toast.success(`${r.data.count} producto(s) importado(s)`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Error al importar");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Importar productos desde carpeta" size="md">
+      <p className="text-sm text-zinc-400 mb-4">
+        Recorre la estructura de carpetas en <code className="text-nabi-300">/api/uploads</code> y crea un producto por cada subcarpeta. Si encuentra <code>descripcion.txt</code> lo usa como descripción.
+      </p>
+      <div className="space-y-4">
+        <div>
+          <Label>Carpeta raíz (en Archivos)</Label>
+          <Input value={folderPath} onChange={(e) => setFolderPath(e.target.value)} placeholder="/Nabimen" data-testid="import-folder-input"/>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={useSubfolder}
+            onChange={(e) => setUseSubfolder(e.target.checked)}
+            id="usesub"
+            data-testid="import-use-subfolder"
+          />
+          <label htmlFor="usesub" className="cursor-pointer">
+            Las subcarpetas de primer nivel son categorías (ej: <code>/Nabimen/Championes/&lt;producto&gt;</code>)
+          </label>
+        </div>
+        {!useSubfolder && (
+          <div>
+            <Label>Categoría para todos los productos</Label>
+            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} data-testid="import-category">
+              <option value="">Sin categoría</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Costo USD por defecto</Label>
+            <Input type="number" step="0.5" value={cost} onChange={(e) => setCost(e.target.value)} data-testid="import-cost"/>
+          </div>
+          <div>
+            <Label>Ganancia % por defecto</Label>
+            <Input type="number" step="1" value={profit} onChange={(e) => setProfit(e.target.value)} data-testid="import-profit"/>
+          </div>
+        </div>
+        {result && (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 text-xs">
+            <strong>{result.count}</strong> creados.{" "}
+            {result.skipped?.length > 0 && (<span className="text-amber-300">{result.skipped.length} omitidos (ya existían o sin fotos)</span>)}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <Btn variant="ghost" onClick={onClose}>Cerrar</Btn>
+          <Btn onClick={submit} disabled={loading} data-testid="run-import-btn">
+            {loading ? "Importando..." : "Importar ahora"}
+          </Btn>
+          {result && <Btn variant="success" onClick={onDone} data-testid="finish-import-btn">Listo</Btn>}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -154,6 +261,10 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
   });
   const [photoUrl, setPhotoUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [pickerFor, setPickerFor] = useState(null); // "main" | {variantIdx: n}
+  const [dragMain, setDragMain] = useState(false);
+  const [dragVariant, setDragVariant] = useState(null);
+  const mainFileInput = useRef(null);
 
   const computedPrice = Number(d.cost_usd) * (1 + Number(d.profit_pct) / 100) * rate;
   const computedPriceRounded = Math.round(computedPrice / 1000) * 1000;
@@ -193,6 +304,27 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
   };
 
   const onUploadMain = (e) => uploadFiles(e.target.files, (urls) => setD((s) => ({ ...s, photos: [...s.photos, ...urls] })));
+
+  const onDropMain = (e) => {
+    e.preventDefault();
+    setDragMain(false);
+    uploadFiles(e.dataTransfer.files, (urls) => setD((s) => ({ ...s, photos: [...s.photos, ...urls] })));
+  };
+  const onDropVariant = (e, idx) => {
+    e.preventDefault();
+    setDragVariant(null);
+    uploadFiles(e.dataTransfer.files, (urls) => updateVariant(idx, { photos: [...(d.variants[idx].photos || []), ...urls] }));
+  };
+
+  const onPickerSelect = (urls) => {
+    if (pickerFor === "main") {
+      setD((s) => ({ ...s, photos: [...s.photos, ...urls] }));
+    } else if (pickerFor && typeof pickerFor.variantIdx === "number") {
+      const idx = pickerFor.variantIdx;
+      updateVariant(idx, { photos: [...(d.variants[idx].photos || []), ...urls] });
+    }
+    setPickerFor(null);
+  };
 
   const addVariant = () => setD((s) => ({ ...s, variants: [...s.variants, { id: null, tag_ids: [], photos: [], label: "" }] }));
   const removeVariant = (idx) => setD((s) => ({ ...s, variants: s.variants.filter((_, i) => i !== idx) }));
@@ -283,35 +415,62 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
         {/* Right: photos + variants */}
         <div className="space-y-5">
           <div>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
               <Label>Fotos principales</Label>
-              <label className="text-[10px] uppercase tracking-wider text-nabi-300 hover:text-nabi-200 cursor-pointer">
-                <Upload className="w-3 h-3 inline mr-1"/>Subir
-                <input type="file" multiple accept="image/*" className="hidden" onChange={onUploadMain} data-testid="upload-main-photos"/>
-              </label>
+              <div className="flex gap-1 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setPickerFor("main")}
+                  className="text-[10px] uppercase tracking-wider text-nabi-300 hover:text-nabi-200 px-2 py-1 border border-nabi-700"
+                  data-testid="main-pick-from-files-btn"
+                >
+                  <FolderOpen className="w-3 h-3 inline mr-1"/>Elegir de archivos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => mainFileInput.current?.click()}
+                  className="text-[10px] uppercase tracking-wider text-nabi-300 hover:text-nabi-200 px-2 py-1 border border-nabi-700"
+                  data-testid="main-upload-pc-btn"
+                >
+                  <Upload className="w-3 h-3 inline mr-1"/>Subir del PC
+                </button>
+                <input ref={mainFileInput} type="file" multiple accept="image/*" className="hidden" onChange={onUploadMain} data-testid="upload-main-photos"/>
+              </div>
             </div>
-            <div className="flex gap-2 mb-2">
-              <Input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="O pegá URL..." data-testid="photo-url-input"/>
-              <Btn variant="secondary" onClick={addPhotoUrl} data-testid="add-photo-url-btn">Agregar</Btn>
-            </div>
-            {uploading && <div className="text-xs text-nabi-300 mb-2">Subiendo...</div>}
-            <div className="grid grid-cols-4 gap-2">
-              {d.photos.map((p, i) => (
-                <div key={i} className="relative group aspect-square bg-zinc-800 overflow-hidden">
-                  <img src={fileUrl(p)} alt="" className="w-full h-full object-cover"/>
-                  {i === 0 && <span className="absolute top-1 left-1 bg-amber-500 text-black text-[9px] font-bold px-1">PORTADA</span>}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition">
-                    {i > 0 && <button onClick={() => movePhotoUp(i)} className="text-white bg-nabi-600 px-1.5 py-0.5 text-[10px]" data-testid={`photo-up-${i}`}>↑</button>}
-                    <button onClick={() => removePhoto(i)} className="text-white bg-rose-600 p-1" data-testid={`photo-remove-${i}`}><X className="w-3 h-3"/></button>
+
+            <div
+              onDragEnter={(e) => { e.preventDefault(); setDragMain(true); }}
+              onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget)) return; setDragMain(false); }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={onDropMain}
+              className={`border-2 border-dashed p-3 mb-2 transition ${
+                dragMain ? "border-nabi-500 bg-nabi-900/30" : "border-zinc-800"
+              }`}
+              data-testid="main-drop-zone"
+            >
+              <div className="flex gap-2 mb-2">
+                <Input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="O pegá URL..." data-testid="photo-url-input"/>
+                <Btn variant="secondary" onClick={addPhotoUrl} data-testid="add-photo-url-btn">Agregar</Btn>
+              </div>
+              {uploading && <div className="text-xs text-nabi-300 mb-2">Subiendo...</div>}
+              <div className="grid grid-cols-4 gap-2">
+                {d.photos.map((p, i) => (
+                  <div key={i} className="relative group aspect-square bg-zinc-800 overflow-hidden">
+                    <img src={fileUrl(p)} alt="" className="w-full h-full object-cover"/>
+                    {i === 0 && <span className="absolute top-1 left-1 bg-amber-500 text-black text-[9px] font-bold px-1">PORTADA</span>}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition">
+                      {i > 0 && <button onClick={() => movePhotoUp(i)} className="text-white bg-nabi-600 px-1.5 py-0.5 text-[10px]" data-testid={`photo-up-${i}`}>↑</button>}
+                      <button onClick={() => removePhoto(i)} className="text-white bg-rose-600 p-1" data-testid={`photo-remove-${i}`}><X className="w-3 h-3"/></button>
+                    </div>
                   </div>
-                </div>
-              ))}
-              {d.photos.length === 0 && (
-                <div className="col-span-4 border-2 border-dashed border-zinc-800 p-6 text-center text-zinc-500 text-xs">
-                  <ImageIcon className="w-6 h-6 mx-auto mb-1 text-zinc-700"/>
-                  Sin fotos. Subí o pegá URL.
-                </div>
-              )}
+                ))}
+                {d.photos.length === 0 && (
+                  <div className="col-span-4 p-6 text-center text-zinc-500 text-xs">
+                    <ImageIcon className="w-6 h-6 mx-auto mb-1 text-zinc-700"/>
+                    Arrastrá imágenes acá, subí del PC o elegí de Archivos.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -353,14 +512,29 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
                     </div>
                   </div>
 
-                  <div>
+                  <div
+                    onDragEnter={(e) => { e.preventDefault(); setDragVariant(idx); }}
+                    onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget)) return; setDragVariant(null); }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => onDropVariant(e, idx)}
+                    className={`border-2 border-dashed p-2 ${dragVariant === idx ? "border-nabi-500 bg-nabi-900/30" : "border-transparent"}`}
+                    data-testid={`variant-${idx}-drop-zone`}
+                  >
                     <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Fotos específicas de esta variante</div>
-                    <div className="flex gap-2 mb-2">
-                      <label className="text-[10px] uppercase tracking-wider text-nabi-300 hover:text-nabi-200 cursor-pointer flex items-center">
-                        <Upload className="w-3 h-3 inline mr-1"/>Subir
+                    <div className="flex gap-2 mb-2 flex-wrap">
+                      <label className="text-[10px] uppercase tracking-wider text-nabi-300 hover:text-nabi-200 cursor-pointer flex items-center border border-nabi-700 px-2 py-1">
+                        <Upload className="w-3 h-3 inline mr-1"/>Subir del PC
                         <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => onUploadVariant(idx, e)} data-testid={`variant-${idx}-upload`}/>
                       </label>
-                      <Input placeholder="O URL..." onKeyDown={(e) => { if (e.key === "Enter") { addVariantUrl(idx, e.currentTarget.value); e.currentTarget.value = ""; }}} data-testid={`variant-${idx}-url-input`}/>
+                      <button
+                        type="button"
+                        onClick={() => setPickerFor({ variantIdx: idx })}
+                        className="text-[10px] uppercase tracking-wider text-nabi-300 hover:text-nabi-200 px-2 py-1 border border-nabi-700"
+                        data-testid={`variant-${idx}-pick-files-btn`}
+                      >
+                        <FolderOpen className="w-3 h-3 inline mr-1"/>Elegir de archivos
+                      </button>
+                      <Input placeholder="O URL..." onKeyDown={(e) => { if (e.key === "Enter") { addVariantUrl(idx, e.currentTarget.value); e.currentTarget.value = ""; }}} data-testid={`variant-${idx}-url-input`} className="!w-40"/>
                     </div>
                     <div className="grid grid-cols-6 gap-1">
                       {(v.photos || []).map((p, pi) => (
@@ -369,6 +543,11 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
                           <button onClick={() => updateVariant(idx, { photos: v.photos.filter((_, i) => i !== pi) })} className="absolute top-0 right-0 bg-rose-600 p-0.5" data-testid={`variant-${idx}-photo-remove-${pi}`}><X className="w-2.5 h-2.5"/></button>
                         </div>
                       ))}
+                      {(v.photos || []).length === 0 && (
+                        <div className="col-span-6 text-[10px] text-zinc-600 text-center py-2">
+                          Arrastrá, subí del PC o elegí de Archivos
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -387,6 +566,15 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
         <Btn variant="ghost" onClick={onClose} data-testid="cancel-product-btn">Cancelar</Btn>
         <Btn onClick={() => onSave(d)} data-testid="save-product-btn">Guardar producto</Btn>
       </div>
+
+      {pickerFor && (
+        <FilePickerModal
+          open={!!pickerFor}
+          onClose={() => setPickerFor(null)}
+          onSelect={onPickerSelect}
+          multiple
+        />
+      )}
     </Modal>
   );
 }

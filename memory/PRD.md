@@ -22,6 +22,8 @@ Tienda online "NABIMEN" (reventa de productos SHEIN en Paraguay) con storefront 
 - Precio: `cost_usd * (1 + profit_pct/100) * exchange_rate` redondeado al millar PYG.
 
 ## Implementado (May 2026)
+- ✅ **Logo real** del usuario integrado (PNG transparente light + invertido para dark theme).
+- ✅ **Tipografía Anton** (display bold) + Manrope (body), reemplazando placeholder genérico.
 - ✅ **Storefront público**: hero editorial bento, navegación por categoría, búsqueda, filtros (marca, precio min/max), sort precio asc/desc + más nuevos.
 - ✅ **Product card** con favoritos (heart), badge "destacado", precio en PYG.
 - ✅ **Modal de producto** con galería multifoto, descripción, selectores de tag por grupo (button/tag), variantes con sus propias fotos, cantidad, add to cart.
@@ -30,7 +32,8 @@ Tienda online "NABIMEN" (reventa de productos SHEIN en Paraguay) con storefront 
 - ✅ **Admin login** dark theme con gradient.
 - ✅ **Admin sidebar** con beam tracing activo: Dashboard, Productos, Categorías, Etiquetas, Pedidos, Archivos, Tasa de Cambio.
 - ✅ **Dashboard**: KPIs (productos activos, pedidos por estado, completados, cancelados, flete cobrado), tarjetas grandes (Ingresos, Costo total, Ganancia neta), chart mensual con Recharts (BarChart Ingresos/Costo/Ganancia).
-- ✅ **Productos panel**: tabla con foto, búsqueda, filtro por categoría, costo/ganancia/precio final calculado. Editor modal completo (datos básicos, etiquetas seleccionables, fotos principales con upload o URL, reordenar, variantes con tags propios + fotos específicas).
+- ✅ **Productos panel**: tabla con foto, búsqueda, filtro por categoría, costo/ganancia/precio final calculado. Editor modal completo (datos básicos, etiquetas seleccionables, fotos con 3 vías: **Subir del PC, Elegir de archivos (FilePickerModal navega /api/uploads), Drag & Drop nativo**, reordenar, variantes con tags propios + fotos específicas + mismas 3 vías).
+- ✅ **Importación masiva desde carpeta**: endpoint `POST /api/products/import-from-folder` que recorre estructura `/Nabimen/<Categoría>/<Producto>/...` o con profundidad variable (Relojes/Marca/Modelo), lee `descripcion.txt`, asigna fotos y crea productos automáticamente. Importados ~100 productos del ZIP del usuario.
 - ✅ **Categorías**: CRUD completo.
 - ✅ **Etiquetas**: CRUD de grupos (display_type: button/tag) + tags con color hex opcional.
 - ✅ **Pedidos**: listado con filtro por estado, detalle con flujo state machine (botón "avanzar"), input de flete cuando aplica, historial de estados, cancelar, eliminar, link directo WhatsApp al cliente.

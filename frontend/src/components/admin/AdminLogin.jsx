@@ -35,7 +35,7 @@ export default function AdminLogin() {
           backgroundImage: "radial-gradient(circle at 20% 30%, rgba(255,255,255,0.15) 0, transparent 40%), radial-gradient(circle at 80% 70%, rgba(67,56,202,0.4) 0, transparent 50%)"
         }} />
         <div className="relative z-10 p-12 flex flex-col justify-between w-full">
-          <NabiLogo size="xl" className="text-white" />
+          <NabiLogo size="xl" variant="dark" />
           <div>
             <div className="text-[11px] uppercase tracking-[0.3em] text-nabi-300 font-bold mb-3">
               Panel de control
@@ -52,7 +52,7 @@ export default function AdminLogin() {
 
       <div className="flex items-center justify-center p-6 lg:p-12">
         <form onSubmit={onSubmit} className="w-full max-w-sm space-y-5" data-testid="admin-login-form">
-          <div className="lg:hidden mb-4"><NabiLogo size="md" className="text-white" /></div>
+          <div className="lg:hidden mb-4"><NabiLogo size="md" variant="dark" /></div>
           <div>
             <h1 className="font-display text-3xl font-bold tracking-tight">Acceso admin</h1>
             <p className="text-sm text-zinc-400 mt-1">Ingresá con tus credenciales.</p>

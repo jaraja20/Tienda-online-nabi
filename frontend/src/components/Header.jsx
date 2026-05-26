@@ -13,8 +13,8 @@ export default function Header({ onOpenCart, onOpenFavs, onSearchChange, search 
   return (
     <header className="sticky top-0 z-40 glass border-b border-zinc-200">
       <div className="max-w-[1400px] mx-auto px-5 lg:px-8 py-3 flex items-center gap-6">
-        <Link to="/" className="shrink-0" data-testid="logo-link">
-          <NabiLogo size="md" />
+        <Link to="/" className="shrink-0 flex items-center" data-testid="logo-link">
+          <NabiLogo size="md" variant="light" />
         </Link>
 
         <nav className="hidden lg:flex items-center gap-6 ml-2 text-xs uppercase tracking-[0.18em] font-bold text-zinc-700">
