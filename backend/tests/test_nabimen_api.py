@@ -7,7 +7,7 @@ import zipfile
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://design-sandbox-11.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://tienda-online-93.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 ADMIN_USER = "admin"
 ADMIN_PASS = "Eljaraja20%"
