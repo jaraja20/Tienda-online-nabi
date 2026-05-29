@@ -1,100 +1,36 @@
 # NABI MEN — PRD
 
-## Problema original
-Tienda online "NABIMEN" (reventa de productos SHEIN en Paraguay) con storefront público estilo Shein + panel admin completo. Stack: React + FastAPI + MongoDB. Modelo de negocio: 50% seña al confirmar pedido, 2–3 semanas de espera, flete extra calculado al arribo según peso, pago final al recibir.
+Tienda online (Paraguay) con catálogo, checkout vía WhatsApp y panel admin completo.
 
-## Arquitectura
-- **Backend (FastAPI)**: `/app/backend/server.py` (todos los routers en un solo módulo, prefijo `/api`).
-- **Frontend (React 18 + Tailwind + Lucide + Recharts + react-router-dom)**: storefront + panel admin con tema dual (claro/oscuro).
-- **DB**: MongoDB local en contenedor (collections: `users`, `products`, `categories`, `tag_groups`, `tags`, `orders`, `settings`).
-- **Auth**: JWT bearer en `Authorization` header, token guardado en `localStorage` (`nm_token`). Único usuario admin sembrado en startup desde `.env`.
-- **Files manager**: archivos físicos bajo `/app/backend/uploads/` servidos como static en `/api/uploads/<path>`.
+## Stack
+- Backend: FastAPI + MongoDB (local). Endpoint base `/api`. Auth JWT (admin/Eljaraja20%).
+- Frontend: React (CRA) + Tailwind. AppContext con estado global. Hot reload activo.
+- Deploy: Emergent + dominio `nabimen.store` (Hostinger DNS → CF IPs).
 
-## Personas
-- **Cliente final**: navega tienda, agrega al carrito, paga vía WhatsApp.
-- **Admin (dueño NABI MEN)**: gestiona productos, etiquetas, pedidos, archivos, dashboard y tasa de cambio.
+## Features implementadas
+- Catálogo: productos, categorías, tags (grupos), variantes por producto.
+- Carrito + favoritos persistentes (localStorage).
+- Checkout vía WhatsApp (`wa.me/<num>`) que arma mensaje con productos, cliente, ciudad y notas.
+- Panel admin: Dashboard, Productos, Categorías, Etiquetas, Pedidos, Archivos, Tasa de cambio, Eventos.
+- Importador de productos por carpeta.
+- Drag & drop de imágenes entre fotos principales y variantes; reordenar fotos; portada.
+- Etiqueta libre por variante: aparece como botón en la tienda y cambia la foto.
+- Sección Hero del home editable desde admin (3 slots: main, side_top, side_bottom) con carrusel auto-rotate.
 
-## Requerimientos fijos
-- Logo "NABI MEN" (bold negro + MEN en azul/indigo).
-- Categorías iniciales: Championes, Remeras, Camisas, Pantalones, Shorts, Relojes, Accesorios (editables).
-- WhatsApp: +595 986 616 939 (editable).
-- Estados de pedido: `en_proceso` → `pagado_parcialmente` → `en_envio` → `arribado` → `completado` + `cancelado`.
-- Precio: `cost_usd * (1 + profit_pct/100) * exchange_rate` redondeado al millar PYG.
+## Cambios recientes (2026-05)
+- `2026-05-28` MVP montado, dominio `nabimen.store` vinculado.
+- `2026-05-28` Fix etiquetas tienda: solo muestra tags asignados (no fallback a todos).
+- `2026-05-29` Drag&drop fotos en editor admin (overlay con pointer-events-none).
+- `2026-05-29` Variantes con label libre → botones de selección en la tienda.
+- `2026-05-29` activePhoto se resetea al cambiar variante.
+- `2026-05-29` **WhatsApp en móvil**: detecta UA y usa `window.location.href` (en desktop pre-abre tab).
+- `2026-05-29` **Admin móvil**: topbar con hamburger, sidebar slide-out, backdrop. Botón retraer/expandir sidebar en desktop (icon-only mode persistido en localStorage).
+- `2026-05-29` **Eventos del Hero editables**: nueva colección `hero_events`, endpoints CRUD, panel admin `EventsPanel`, componente `HeroSection` con carrusel autoplay (5.5s) por slot.
 
-## Implementado (May 2026)
-- ✅ **Logo real** del usuario integrado (PNG transparente light + invertido para dark theme).
-- ✅ **Tipografía Anton** (display bold) + Manrope (body), reemplazando placeholder genérico.
-- ✅ **Storefront público**: hero editorial bento, navegación por categoría, búsqueda, filtros (marca, precio min/max), sort precio asc/desc + más nuevos.
-- ✅ **Product card** con favoritos (heart), badge "destacado", precio en PYG.
-- ✅ **Modal de producto** con galería multifoto, descripción, selectores de tag por grupo (button/tag), variantes con sus propias fotos, cantidad, add to cart.
-- ✅ **Carrito** persistente (localStorage), edición de qty, total, políticas embebidas, transición a form de datos (nombre, teléfono opcional, ubicación CDE/Asunción/Encarnación/San Lorenzo/Otra, notas). Confirmar abre `wa.me` con mensaje autogenerado + persiste orden en backend.
-- ✅ **Favoritos** persistente, side sheet con listado y acceso al modal.
-- ✅ **Admin login** dark theme con gradient.
-- ✅ **Admin sidebar** con beam tracing activo: Dashboard, Productos, Categorías, Etiquetas, Pedidos, Archivos, Tasa de Cambio.
-- ✅ **Dashboard**: KPIs (productos activos, pedidos por estado, completados, cancelados, flete cobrado), tarjetas grandes (Ingresos, Costo total, Ganancia neta), chart mensual con Recharts (BarChart Ingresos/Costo/Ganancia).
-- ✅ **Productos panel**: tabla con foto, búsqueda, filtro por categoría, costo/ganancia/precio final calculado. Editor modal completo (datos básicos, etiquetas seleccionables, fotos con 3 vías: **Subir del PC, Elegir de archivos (FilePickerModal navega /api/uploads), Drag & Drop nativo**, reordenar, variantes con tags propios + fotos específicas + mismas 3 vías).
-- ✅ **Importación masiva desde carpeta**: endpoint `POST /api/products/import-from-folder` que recorre estructura `/Nabimen/<Categoría>/<Producto>/...` o con profundidad variable (Relojes/Marca/Modelo), lee `descripcion.txt`, asigna fotos y crea productos automáticamente. Importados ~100 productos del ZIP del usuario.
-- ✅ **Categorías**: CRUD completo.
-- ✅ **Etiquetas**: CRUD de grupos (display_type: button/tag) + tags con color hex opcional.
-- ✅ **Pedidos**: listado con filtro por estado, detalle con flujo state machine (botón "avanzar"), input de flete cuando aplica, historial de estados, cancelar, eliminar, link directo WhatsApp al cliente.
-- ✅ **Archivos**: explorador tipo Windows (carpetas, archivos, breadcrumbs, drag&drop, ZIP autoextract preservando estructura, eliminar, copiar URL pública). Path-traversal protegido.
-- ✅ **Tasa de Cambio**: input manual USD→PYG, edita WhatsApp, business name, políticas. Al guardar recalcula precios automáticamente.
+## Backlog / Próximas
+- P1: typeahead búsqueda, slug `/producto/<id>` para compartir, exportar CSV pedidos.
+- P1: subir fotos reales del catálogo.
+- P2: i18n, tracking público de pedidos.
 
-## Backlog priorizado
-
-### P0 (siguientes pasos sugeridos)
-- Migración a PostgreSQL local del usuario (Prisma o SQLAlchemy + Alembic) cuando quiera deployar a Vercel.
-- Subida real de las fotos del usuario (ZIP de relojes pendiente que mencionó).
-- Mostrar **flete acumulado** como línea separada en el carrito + WhatsApp.
-- Soporte de **múltiples WhatsApp** o pasar por etapa con contestación interna antes de wa.me (opcional).
-
-### P1
-- **Búsqueda avanzada** con typeahead.
-- **Reordenar variantes** y fijar variante por defecto.
-- Mostrar **stock** opcional por variante.
-- Compartir producto (Open Graph + URL slug `/producto/<slug>`).
-- Subida de logo desde admin (settings).
-
-### P2
-- **Internacionalización** (es/en/pt).
-- Exportar pedidos a CSV/Excel.
-- Notificación browser/sonora cuando llega nueva orden.
-- Tracking público del pedido con código (cliente ve estado actual).
-- Dark/Light toggle en storefront.
-
-## Endpoints clave
-```
-POST   /api/auth/login            (público)
-GET    /api/auth/me               (admin)
-GET    /api/settings              (público)
-PUT    /api/settings              (admin)
-GET    /api/categories            (público)
-POST   /api/categories            (admin)
-PUT    /api/categories/{id}       (admin)
-DELETE /api/categories/{id}       (admin)
-GET    /api/tag-groups, /api/tags (público)
-POST/PUT/DELETE para tag-groups, tags (admin)
-GET    /api/products              (público, ?category=, ?q=, ?sort=)
-GET    /api/products/{id}         (público)
-POST/PUT/DELETE para products     (admin)
-GET    /api/orders                (admin, ?status=)
-POST   /api/orders                (público — carrito)
-PUT    /api/orders/{id}           (admin — cambio de estado, flete)
-DELETE /api/orders/{id}           (admin)
-GET    /api/files/list            (admin)
-POST   /api/files/mkdir, upload, rename (admin)
-DELETE /api/files/delete          (admin)
-GET    /api/uploads/<path>        (público static)
-GET    /api/dashboard/stats       (admin)
-GET    /api/health
-```
-
-## Stack & seeds
-- Tasa default: ₲ 7800 / USD.
-- 7 productos seed (uno por categoría) usando URLs Unsplash/Pexels.
-- 3 grupos de tags + 18 tags seed.
-
-## Testing status (May 2026)
-- ✅ Backend: 27/27 pytest tests passing.
-- ✅ Frontend: ~95% flows working (storefront, carrito, WhatsApp checkout, admin login, todos los paneles, CRUD productos, exchange rate).
-- Issues menores resueltos: mkdir duplicado retorna 400 (en lugar de 500).
+## Credenciales
+- Admin: `admin` / `Eljaraja20%` (también en `/app/memory/test_credentials.md`)

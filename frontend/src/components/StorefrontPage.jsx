@@ -6,16 +6,12 @@ import ProductCard from "./ProductCard";
 import ProductDetailModal from "./ProductDetailModal";
 import CartSheet from "./CartSheet";
 import FavoritesSheet from "./FavoritesSheet";
+import HeroSection from "./HeroSection";
 import { NabiLogo } from "./NabiLogo";
 import { SlidersHorizontal, ArrowUpDown, X } from "lucide-react";
 
-const HERO_IMAGES = [
-  "https://images.unsplash.com/photo-1576775068668-c147f14c36f7?crop=entropy&cs=srgb&fm=jpg&q=85&w=1400",
-  "https://images.pexels.com/photos/29548609/pexels-photo-29548609.jpeg?auto=compress&cs=tinysrgb&w=1400",
-];
-
 export default function StorefrontPage() {
-  const { products, categories, settings } = useApp();
+  const { products, categories, settings, heroEvents } = useApp();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("newest");
   const [openProduct, setOpenProduct] = useState(null);
@@ -73,44 +69,7 @@ export default function StorefrontPage() {
       {/* HERO */}
       {!catSlug && (
         <section className="border-b border-zinc-200">
-          <div className="max-w-[1400px] mx-auto px-5 lg:px-8 py-10 lg:py-14 grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-7 relative bg-zinc-100 overflow-hidden min-h-[380px] lg:min-h-[520px]">
-              <img src={HERO_IMAGES[0]} alt="Streetwear" className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-              <div className="absolute bottom-8 left-8 right-8 text-white">
-                <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-nabi-200 mb-2">
-                  Drop · Streetwear by encargo
-                </div>
-                <h1 className="font-display tracking-tight text-5xl sm:text-6xl lg:text-7xl leading-[0.92] uppercase">
-                  Pedí tu Shein.<br />
-                  <span className="text-nabi-300">Recibí estilo en CDE.</span>
-                </h1>
-                <p className="mt-3 text-sm text-zinc-200 max-w-md">
-                  Championes, relojes, remeras y accesorios traídos por encargo. 50% de seña, 2–3 semanas, calidad garantizada.
-                </p>
-              </div>
-            </div>
-
-            <div className="lg:col-span-5 grid grid-rows-2 gap-6">
-              <div className="bg-ink text-white p-8 lg:p-10 flex flex-col justify-between">
-                <NabiLogo size="xl" variant="dark" />
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.3em] text-nabi-300 font-bold mb-2">Conexión directa</div>
-                  <p className="text-sm text-zinc-300 leading-relaxed max-w-xs">
-                    Cada pedido se gestiona personalmente vía WhatsApp. Sin sorpresas, sin intermediarios.
-                  </p>
-                </div>
-              </div>
-              <div className="relative bg-zinc-100 overflow-hidden">
-                <img src={HERO_IMAGES[1]} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-nabi-900/80 to-transparent" />
-                <div className="absolute bottom-6 left-6 right-6 text-white">
-                  <div className="text-[10px] uppercase tracking-[0.3em] font-bold">Drop actual</div>
-                  <h3 className="font-display font-bold text-2xl mt-1">Nueva temporada</h3>
-                </div>
-              </div>
-            </div>
-          </div>
+          <HeroSection heroEvents={heroEvents} />
 
           {/* Category strip */}
           <div className="border-t border-zinc-200">

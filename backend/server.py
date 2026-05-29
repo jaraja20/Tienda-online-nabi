@@ -208,6 +208,17 @@ class SettingsIn(BaseModel):
     policies_text: Optional[str] = None
 
 
+class HeroEventIn(BaseModel):
+    slot: str  # "main" | "side_top" | "side_bottom"
+    image_url: Optional[str] = None
+    eyebrow: Optional[str] = None
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    order: Optional[int] = 0
+    active: Optional[bool] = True
+
+
 ORDER_STATES = [
     "en_proceso",
     "pagado_parcialmente",
@@ -469,6 +480,58 @@ async def update_settings(body: SettingsIn, user=Depends(require_admin)):
     await db.settings.update_one({"id": "app"}, {"$set": upd}, upsert=True)
     s = await db.settings.find_one({"id": "app"})
     return doc(s)
+
+
+# ---------------- Hero events ----------------
+HERO_SLOTS = {"main", "side_top", "side_bottom"}
+
+
+@api.get("/hero-events")
+async def list_hero_events():
+    items = await db.hero_events.find({}).sort([("slot", 1), ("order", 1)]).to_list(500)
+    return [doc(x) for x in items]
+
+
+@api.post("/hero-events")
+async def create_hero_event(body: HeroEventIn, user=Depends(require_admin)):
+    if body.slot not in HERO_SLOTS:
+        raise HTTPException(status_code=400, detail="Slot inválido")
+    item = {
+        "id": str(uuid.uuid4()),
+        "slot": body.slot,
+        "image_url": body.image_url or "",
+        "eyebrow": body.eyebrow or "",
+        "title": body.title or "",
+        "subtitle": body.subtitle or "",
+        "description": body.description or "",
+        "order": int(body.order or 0),
+        "active": bool(body.active if body.active is not None else True),
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.hero_events.insert_one(item)
+    return doc(item)
+
+
+@api.put("/hero-events/{eid}")
+async def update_hero_event(eid: str, body: HeroEventIn, user=Depends(require_admin)):
+    if body.slot not in HERO_SLOTS:
+        raise HTTPException(status_code=400, detail="Slot inválido")
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    upd["updated_at"] = now_iso()
+    r = await db.hero_events.update_one({"id": eid}, {"$set": upd})
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+    item = await db.hero_events.find_one({"id": eid})
+    return doc(item)
+
+
+@api.delete("/hero-events/{eid}")
+async def delete_hero_event(eid: str, user=Depends(require_admin)):
+    r = await db.hero_events.delete_one({"id": eid})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+    return {"ok": True}
 
 
 # ---------------- Categories ----------------

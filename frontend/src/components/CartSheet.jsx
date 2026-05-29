@@ -27,6 +27,10 @@ export default function CartSheet({ open, onClose }) {
     }
     setSubmitting(true);
     const finalLocation = form.location === "Otra" ? (form.location_other || "Otra ciudad") : form.location;
+    // Abrimos una ventana placeholder ANTES del await para que los navegadores
+    // móviles no lo consideren popup automático y bloqueen.
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+    const placeholder = isMobile ? null : window.open("about:blank", "_blank");
     try {
       const r = await api.post("/orders", {
         items: cart.map((c) => ({
@@ -68,13 +72,22 @@ export default function CartSheet({ open, onClose }) {
       lines.push("Confirmo el pedido y entiendo las políticas (50% seña, 2–3 semanas, flete a calcular al arribo).");
       const msg = encodeURIComponent(lines.join("\n"));
       const url = `https://wa.me/${wsNumber}?text=${msg}`;
-      window.open(url, "_blank");
+      if (isMobile) {
+        // En móvil, navegar la misma pestaña → el SO abre la app de WhatsApp directamente.
+        window.location.href = url;
+      } else if (placeholder && !placeholder.closed) {
+        placeholder.location.href = url;
+      } else {
+        // Fallback si el popup fue bloqueado
+        window.location.href = url;
+      }
       clearCart();
       setStage("cart");
       setForm({ customer_name: "", customer_phone: "", location: "Ciudad del Este", location_other: "", notes: "" });
       onClose();
       toast.success("Pedido creado. Abrimos WhatsApp.");
     } catch (e) {
+      if (placeholder && !placeholder.closed) placeholder.close();
       toast.error("Error al crear el pedido");
     } finally {
       setSubmitting(false);

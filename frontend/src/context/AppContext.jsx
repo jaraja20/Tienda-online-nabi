@@ -9,6 +9,7 @@ export function AppProvider({ children }) {
   const [tagGroups, setTagGroups] = useState([]);
   const [tags, setTags] = useState([]);
   const [products, setProducts] = useState([]);
+  const [heroEvents, setHeroEvents] = useState([]);
   const [rate, setRate] = useState(7800);
   const [favorites, setFavorites] = useState(() => {
     try { return JSON.parse(localStorage.getItem("nm_favs") || "[]"); } catch { return []; }
@@ -33,18 +34,20 @@ export function AppProvider({ children }) {
 
   const loadInitial = useCallback(async () => {
     try {
-      const [s, c, g, t, p] = await Promise.all([
+      const [s, c, g, t, p, h] = await Promise.all([
         api.get("/settings"),
         api.get("/categories"),
         api.get("/tag-groups"),
         api.get("/tags"),
         api.get("/products"),
+        api.get("/hero-events"),
       ]);
       setSettings(s.data);
       setCategories(c.data);
       setTagGroups(g.data);
       setTags(t.data);
       setProducts(p.data.items || []);
+      setHeroEvents(h.data || []);
       setRate(p.data.rate || s.data.exchange_rate || 7800);
     } catch (e) {
       console.error("loadInitial err", e);
@@ -80,6 +83,10 @@ export function AppProvider({ children }) {
   const refreshTags = useCallback(async () => {
     const [g, t] = await Promise.all([api.get("/tag-groups"), api.get("/tags")]);
     setTagGroups(g.data); setTags(t.data);
+  }, []);
+
+  const refreshHeroEvents = useCallback(async () => {
+    const r = await api.get("/hero-events"); setHeroEvents(r.data || []);
   }, []);
 
   // Favorites
@@ -135,12 +142,12 @@ export function AppProvider({ children }) {
 
   return (
     <AppCtx.Provider value={{
-      settings, categories, tagGroups, tags, products, rate,
+      settings, categories, tagGroups, tags, products, rate, heroEvents,
       tagsById, tagGroupsById, categoriesById, productsById,
       favorites, isFav, toggleFavorite,
       cart, addToCart, updateCartQty, removeFromCart, clearCart,
       token, admin, login, logout,
-      loadInitial, refreshProducts, refreshSettings, refreshCategories, refreshTags,
+      loadInitial, refreshProducts, refreshSettings, refreshCategories, refreshTags, refreshHeroEvents,
       setRate,
     }}>
       {children}
