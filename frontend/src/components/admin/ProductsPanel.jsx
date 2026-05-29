@@ -264,6 +264,7 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
   const [pickerFor, setPickerFor] = useState(null); // "main" | {variantIdx: n}
   const [dragMain, setDragMain] = useState(false);
   const [dragVariant, setDragVariant] = useState(null);
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false); // global flag para resaltar zonas
   const mainFileInput = useRef(null);
 
   const computedPrice = Number(d.cost_usd) * (1 + Number(d.profit_pct) / 100) * rate;
@@ -358,7 +359,9 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
     e.dataTransfer.setData(NABI_MIME, JSON.stringify({ url, source }));
     // fallback para algunos navegadores
     e.dataTransfer.setData("text/plain", url);
+    setIsDraggingPhoto(true);
   };
+  const dragEndPhoto = () => setIsDraggingPhoto(false);
 
   // Reorder y eliminar foto dentro de una variante
   const moveVariantPhotoUp = (idx, pi) => setD((s) => {
@@ -519,13 +522,14 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
                     className="relative group aspect-square bg-zinc-800 overflow-hidden cursor-grab active:cursor-grabbing"
                     draggable
                     onDragStart={(e) => dragStartPhoto(e, p, "main")}
+                    onDragEnd={dragEndPhoto}
                     data-testid={`main-photo-${i}`}
                   >
-                    <img src={fileUrl(p)} alt="" className="w-full h-full object-cover pointer-events-none"/>
-                    {i === 0 && <span className="absolute top-1 left-1 bg-amber-500 text-black text-[9px] font-bold px-1">PORTADA</span>}
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition">
-                      {i > 0 && <button onClick={() => movePhotoUp(i)} className="text-white bg-nabi-600 px-1.5 py-0.5 text-[10px]" data-testid={`photo-up-${i}`}>↑</button>}
-                      <button onClick={() => removePhoto(i)} className="text-white bg-rose-600 p-1" data-testid={`photo-remove-${i}`}><X className="w-3 h-3"/></button>
+                    <img src={fileUrl(p)} alt="" draggable={false} className="w-full h-full object-cover pointer-events-none select-none"/>
+                    {i === 0 && <span className="absolute top-1 left-1 bg-amber-500 text-black text-[9px] font-bold px-1 pointer-events-none">PORTADA</span>}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition pointer-events-none">
+                      {i > 0 && <button onClick={() => movePhotoUp(i)} className="text-white bg-nabi-600 px-1.5 py-0.5 text-[10px] pointer-events-auto" data-testid={`photo-up-${i}`}>↑</button>}
+                      <button onClick={() => removePhoto(i)} className="text-white bg-rose-600 p-1 pointer-events-auto" data-testid={`photo-remove-${i}`}><X className="w-3 h-3"/></button>
                     </div>
                   </div>
                 ))}
@@ -582,7 +586,13 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
                     onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget)) return; setDragVariant(null); }}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => onDropVariant(e, idx)}
-                    className={`border-2 border-dashed p-2 ${dragVariant === idx ? "border-nabi-500 bg-nabi-900/30" : "border-transparent"}`}
+                    className={`border-2 border-dashed p-2 transition ${
+                      dragVariant === idx
+                        ? "border-nabi-500 bg-nabi-900/40"
+                        : isDraggingPhoto
+                        ? "border-nabi-700/60 bg-nabi-900/10"
+                        : "border-transparent"
+                    }`}
                     data-testid={`variant-${idx}-drop-zone`}
                   >
                     <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">
@@ -610,21 +620,22 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
                           className="relative group aspect-square bg-zinc-800 cursor-grab active:cursor-grabbing"
                           draggable
                           onDragStart={(e) => dragStartPhoto(e, p, { variantIdx: idx })}
+                          onDragEnd={dragEndPhoto}
                           data-testid={`variant-${idx}-photo-${pi}`}
                         >
-                          <img src={fileUrl(p)} alt="" className="w-full h-full object-cover pointer-events-none"/>
-                          {pi === 0 && <span className="absolute bottom-0 left-0 right-0 bg-amber-500/90 text-black text-[8px] font-bold px-1 text-center">PORTADA</span>}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-0.5 transition">
+                          <img src={fileUrl(p)} alt="" draggable={false} className="w-full h-full object-cover pointer-events-none select-none"/>
+                          {pi === 0 && <span className="absolute bottom-0 left-0 right-0 bg-amber-500/90 text-black text-[8px] font-bold px-1 text-center pointer-events-none">PORTADA</span>}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-0.5 transition pointer-events-none">
                             {pi > 0 && (
                               <button
                                 onClick={() => moveVariantPhotoUp(idx, pi)}
-                                className="text-white bg-nabi-600 px-1 py-0.5 text-[9px]"
+                                className="text-white bg-nabi-600 px-1 py-0.5 text-[9px] pointer-events-auto"
                                 data-testid={`variant-${idx}-photo-up-${pi}`}
                               >↑</button>
                             )}
                             <button
                               onClick={() => removeVariantPhoto(idx, pi)}
-                              className="text-white bg-rose-600 p-0.5"
+                              className="text-white bg-rose-600 p-0.5 pointer-events-auto"
                               data-testid={`variant-${idx}-photo-remove-${pi}`}
                             ><X className="w-2.5 h-2.5"/></button>
                           </div>

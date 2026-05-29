@@ -8,20 +8,34 @@ import toast from "react-hot-toast";
 export default function ProductDetailModal({ product, onClose }) {
   const { isFav, toggleFavorite, addToCart, tagGroups, tagsById, categoriesById } = useApp();
   const [selectedTagIds, setSelectedTagIds] = useState({}); // {group_id: tag_id}
+  const [selectedVariantId, setSelectedVariantId] = useState(null); // selección directa por "label" de variante
   const [qty, setQty] = useState(1);
   const [activePhoto, setActivePhoto] = useState(0);
 
   useEffect(() => {
     setSelectedTagIds({});
+    setSelectedVariantId(null);
     setQty(1);
     setActivePhoto(0);
   }, [product?.id]);
 
   const cat = product ? categoriesById?.[product.category_id] : null;
 
-  // Determine which variant matches current selection (any tag match)
+  // Variantes con etiqueta libre (label) que tengan fotos propias -> aparecen como botones de selección directa.
+  const labeledVariants = useMemo(() => {
+    if (!product?.variants?.length) return [];
+    return product.variants.filter((v) => (v.label || "").trim() && (v.photos || []).length);
+  }, [product]);
+
+  // Determinar variante actual:
+  //  1. Si el usuario clickeó un botón "Variante" -> esa.
+  //  2. Sino, matchea por tags seleccionados.
   const matchedVariant = useMemo(() => {
     if (!product) return null;
+    if (selectedVariantId) {
+      const direct = product.variants?.find((v) => (v.id || v.label) === selectedVariantId);
+      if (direct) return direct;
+    }
     const selectedIds = Object.values(selectedTagIds).filter(Boolean);
     if (!selectedIds.length || !product.variants?.length) return null;
     const exact = product.variants.find((v) =>
@@ -32,7 +46,12 @@ export default function ProductDetailModal({ product, onClose }) {
     return product.variants.find((v) =>
       (v.tag_ids || []).some((id) => selectedIds.includes(id))
     ) || null;
-  }, [selectedTagIds, product]);
+  }, [selectedTagIds, selectedVariantId, product]);
+
+  // Cada vez que cambia la variante activa, volver a la foto #0
+  useEffect(() => {
+    setActivePhoto(0);
+  }, [matchedVariant?.id, matchedVariant?.label]);
 
   // Group tags available for this product
   // Solo muestra tags que el admin asignó explícitamente al producto o a alguna variante.
@@ -70,12 +89,13 @@ export default function ProductDetailModal({ product, onClose }) {
   const activeImg = fileUrl(photos[activePhoto] || photos[0] || "https://placehold.co/800x800/eee/333?text=NABI");
 
   const handleAdd = () => {
+    const tagBasedLabel = Object.values(selectedTagIds)
+      .map((id) => tagsById[id]?.value)
+      .filter(Boolean)
+      .join(" / ");
     const variantLabel = matchedVariant
-      ? buildVariantLabel(matchedVariant, tagsById)
-      : Object.values(selectedTagIds)
-          .map((id) => tagsById[id]?.value)
-          .filter(Boolean)
-          .join(" / ");
+      ? (matchedVariant.label?.trim() || buildVariantLabel(matchedVariant, tagsById) || tagBasedLabel)
+      : tagBasedLabel;
     addToCart({
       product_id: product.id,
       variant_id: matchedVariant?.id || null,
@@ -176,6 +196,36 @@ export default function ProductDetailModal({ product, onClose }) {
             </p>
           )}
 
+          {/* Variantes con etiqueta libre (label) — cada una es un botón que cambia la foto */}
+          {labeledVariants.length > 0 && (
+            <div className="mb-5">
+              <div className="text-[10px] uppercase tracking-[0.25em] font-bold text-zinc-600 mb-2">
+                Variante
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {labeledVariants.map((v) => {
+                  const key = v.id || v.label;
+                  const sel = selectedVariantId === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setSelectedVariantId(sel ? null : key);
+                        setSelectedTagIds({}); // limpiar tags para que la elección directa mande
+                      }}
+                      data-testid={`variant-btn-${key}`}
+                      className={`px-4 py-2 border text-xs font-semibold uppercase tracking-wider transition ${
+                        sel ? "bg-ink text-white border-ink" : "border-zinc-300 hover:border-ink"
+                      }`}
+                    >
+                      {v.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Tag selectors per group */}
           <div className="space-y-4 mb-6">
             {tagGroups
@@ -192,7 +242,10 @@ export default function ProductDetailModal({ product, onClose }) {
                         return (
                           <button
                             key={t.id}
-                            onClick={() => setSelectedTagIds((s) => ({ ...s, [g.id]: sel ? null : t.id }))}
+                            onClick={() => {
+                              setSelectedVariantId(null);
+                              setSelectedTagIds((s) => ({ ...s, [g.id]: sel ? null : t.id }));
+                            }}
                             data-testid={`tag-${t.id}`}
                             className={`flex items-center gap-2 px-3 py-1.5 border text-xs font-semibold transition ${
                               sel ? "border-nabi-600 ring-2 ring-nabi-200" : "border-zinc-300 hover:border-zinc-500"
@@ -206,7 +259,10 @@ export default function ProductDetailModal({ product, onClose }) {
                       return (
                         <button
                           key={t.id}
-                          onClick={() => setSelectedTagIds((s) => ({ ...s, [g.id]: sel ? null : t.id }))}
+                          onClick={() => {
+                            setSelectedVariantId(null);
+                            setSelectedTagIds((s) => ({ ...s, [g.id]: sel ? null : t.id }));
+                          }}
                           data-testid={`tag-${t.id}`}
                           className={`px-4 py-2 border text-xs font-semibold uppercase tracking-wider transition ${
                             sel ? "bg-ink text-white border-ink" : "border-zinc-300 hover:border-ink"
