@@ -35,13 +35,19 @@ export default function ProductDetailModal({ product, onClose }) {
   }, [selectedTagIds, product]);
 
   // Group tags available for this product
+  // Solo muestra tags que el admin asignó explícitamente al producto o a alguna variante.
+  // Si no se asignó ningún tag de un grupo, ese grupo NO aparece en la tienda.
   const groupedTags = useMemo(() => {
     if (!product) return {};
-    const all = (product.tag_ids?.length ? product.tag_ids : []);
-    const tagsInProduct = all.length
-      ? all.map((id) => tagsById[id]).filter(Boolean)
-      : Object.values(tagsById);
+    const tagsInProduct = [];
 
+    // tags asignados directamente al producto
+    (product.tag_ids || []).forEach((id) => {
+      const t = tagsById[id];
+      if (t && !tagsInProduct.find((x) => x.id === id)) tagsInProduct.push(t);
+    });
+
+    // tags asignados en variantes
     (product.variants || []).forEach((v) => {
       (v.tag_ids || []).forEach((id) => {
         const t = tagsById[id];
