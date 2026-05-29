@@ -305,16 +305,75 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
 
   const onUploadMain = (e) => uploadFiles(e.target.files, (urls) => setD((s) => ({ ...s, photos: [...s.photos, ...urls] })));
 
+  // Internal drag payload (foto ya existente que se arrastra entre zonas)
+  // Formato: JSON con { url, source: "main" | {variantIdx: n} }
+  const NABI_MIME = "application/x-nabi-photo";
+
   const onDropMain = (e) => {
     e.preventDefault();
     setDragMain(false);
-    uploadFiles(e.dataTransfer.files, (urls) => setD((s) => ({ ...s, photos: [...s.photos, ...urls] })));
+    // ¿Es un drag interno (foto que viene de una variante)?
+    const internal = e.dataTransfer.getData(NABI_MIME);
+    if (internal) {
+      try {
+        const payload = JSON.parse(internal);
+        if (payload.url) {
+          // Si vino de una variante, no la sacamos de ahí; solo la sumamos a main si no existe.
+          setD((s) => (s.photos.includes(payload.url) ? s : { ...s, photos: [...s.photos, payload.url] }));
+        }
+      } catch {}
+      return;
+    }
+    // Archivos del SO → subir
+    if (e.dataTransfer.files?.length) {
+      uploadFiles(e.dataTransfer.files, (urls) => setD((s) => ({ ...s, photos: [...s.photos, ...urls] })));
+    }
   };
+
   const onDropVariant = (e, idx) => {
     e.preventDefault();
     setDragVariant(null);
-    uploadFiles(e.dataTransfer.files, (urls) => updateVariant(idx, { photos: [...(d.variants[idx].photos || []), ...urls] }));
+    const internal = e.dataTransfer.getData(NABI_MIME);
+    if (internal) {
+      try {
+        const payload = JSON.parse(internal);
+        if (payload.url) {
+          updateVariant(idx, {
+            photos: (d.variants[idx].photos || []).includes(payload.url)
+              ? d.variants[idx].photos
+              : [...(d.variants[idx].photos || []), payload.url],
+          });
+        }
+      } catch {}
+      return;
+    }
+    if (e.dataTransfer.files?.length) {
+      uploadFiles(e.dataTransfer.files, (urls) => updateVariant(idx, { photos: [...(d.variants[idx].photos || []), ...urls] }));
+    }
   };
+
+  // Helpers de drag-start
+  const dragStartPhoto = (e, url, source) => {
+    e.dataTransfer.effectAllowed = "copyMove";
+    e.dataTransfer.setData(NABI_MIME, JSON.stringify({ url, source }));
+    // fallback para algunos navegadores
+    e.dataTransfer.setData("text/plain", url);
+  };
+
+  // Reorder y eliminar foto dentro de una variante
+  const moveVariantPhotoUp = (idx, pi) => setD((s) => {
+    if (pi === 0) return s;
+    const variants = [...s.variants];
+    const arr = [...(variants[idx].photos || [])];
+    [arr[pi - 1], arr[pi]] = [arr[pi], arr[pi - 1]];
+    variants[idx] = { ...variants[idx], photos: arr };
+    return { ...s, variants };
+  });
+  const removeVariantPhoto = (idx, pi) => setD((s) => {
+    const variants = [...s.variants];
+    variants[idx] = { ...variants[idx], photos: (variants[idx].photos || []).filter((_, i) => i !== pi) };
+    return { ...s, variants };
+  });
 
   const onPickerSelect = (urls) => {
     if (pickerFor === "main") {
@@ -455,8 +514,14 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
               {uploading && <div className="text-xs text-nabi-300 mb-2">Subiendo...</div>}
               <div className="grid grid-cols-4 gap-2">
                 {d.photos.map((p, i) => (
-                  <div key={i} className="relative group aspect-square bg-zinc-800 overflow-hidden">
-                    <img src={fileUrl(p)} alt="" className="w-full h-full object-cover"/>
+                  <div
+                    key={i}
+                    className="relative group aspect-square bg-zinc-800 overflow-hidden cursor-grab active:cursor-grabbing"
+                    draggable
+                    onDragStart={(e) => dragStartPhoto(e, p, "main")}
+                    data-testid={`main-photo-${i}`}
+                  >
+                    <img src={fileUrl(p)} alt="" className="w-full h-full object-cover pointer-events-none"/>
                     {i === 0 && <span className="absolute top-1 left-1 bg-amber-500 text-black text-[9px] font-bold px-1">PORTADA</span>}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition">
                       {i > 0 && <button onClick={() => movePhotoUp(i)} className="text-white bg-nabi-600 px-1.5 py-0.5 text-[10px]" data-testid={`photo-up-${i}`}>↑</button>}
@@ -520,7 +585,9 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
                     className={`border-2 border-dashed p-2 ${dragVariant === idx ? "border-nabi-500 bg-nabi-900/30" : "border-transparent"}`}
                     data-testid={`variant-${idx}-drop-zone`}
                   >
-                    <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Fotos específicas de esta variante</div>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">
+                      Fotos específicas de esta variante <span className="text-zinc-600 normal-case">· la primera es la portada</span>
+                    </div>
                     <div className="flex gap-2 mb-2 flex-wrap">
                       <label className="text-[10px] uppercase tracking-wider text-nabi-300 hover:text-nabi-200 cursor-pointer flex items-center border border-nabi-700 px-2 py-1">
                         <Upload className="w-3 h-3 inline mr-1"/>Subir del PC
@@ -538,14 +605,34 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
                     </div>
                     <div className="grid grid-cols-6 gap-1">
                       {(v.photos || []).map((p, pi) => (
-                        <div key={pi} className="relative aspect-square bg-zinc-800">
-                          <img src={fileUrl(p)} alt="" className="w-full h-full object-cover"/>
-                          <button onClick={() => updateVariant(idx, { photos: v.photos.filter((_, i) => i !== pi) })} className="absolute top-0 right-0 bg-rose-600 p-0.5" data-testid={`variant-${idx}-photo-remove-${pi}`}><X className="w-2.5 h-2.5"/></button>
+                        <div
+                          key={pi}
+                          className="relative group aspect-square bg-zinc-800 cursor-grab active:cursor-grabbing"
+                          draggable
+                          onDragStart={(e) => dragStartPhoto(e, p, { variantIdx: idx })}
+                          data-testid={`variant-${idx}-photo-${pi}`}
+                        >
+                          <img src={fileUrl(p)} alt="" className="w-full h-full object-cover pointer-events-none"/>
+                          {pi === 0 && <span className="absolute bottom-0 left-0 right-0 bg-amber-500/90 text-black text-[8px] font-bold px-1 text-center">PORTADA</span>}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-0.5 transition">
+                            {pi > 0 && (
+                              <button
+                                onClick={() => moveVariantPhotoUp(idx, pi)}
+                                className="text-white bg-nabi-600 px-1 py-0.5 text-[9px]"
+                                data-testid={`variant-${idx}-photo-up-${pi}`}
+                              >↑</button>
+                            )}
+                            <button
+                              onClick={() => removeVariantPhoto(idx, pi)}
+                              className="text-white bg-rose-600 p-0.5"
+                              data-testid={`variant-${idx}-photo-remove-${pi}`}
+                            ><X className="w-2.5 h-2.5"/></button>
+                          </div>
                         </div>
                       ))}
                       {(v.photos || []).length === 0 && (
-                        <div className="col-span-6 text-[10px] text-zinc-600 text-center py-2">
-                          Arrastrá, subí del PC o elegí de Archivos
+                        <div className="col-span-6 text-[10px] text-zinc-600 text-center py-3 border border-dashed border-zinc-800">
+                          Arrastrá una foto principal acá, subí del PC o elegí de Archivos
                         </div>
                       )}
                     </div>
