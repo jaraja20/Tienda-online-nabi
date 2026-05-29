@@ -747,9 +747,11 @@ async def create_order(body: OrderIn):
     profit_total = 0.0
     settings_doc = await db.settings.find_one({"id": "app"}) or {}
     rate = float(settings_doc.get("exchange_rate", DEFAULT_USD_RATE))
-    # Compute cost vs profit per item using product data
+    # Compute cost vs profit per item using product data (batch fetch para evitar N+1)
+    product_ids = list({it["product_id"] for it in items_dump})
+    prods = {p["id"]: p async for p in db.products.find({"id": {"$in": product_ids}})}
     for it in items_dump:
-        prod = await db.products.find_one({"id": it["product_id"]})
+        prod = prods.get(it["product_id"])
         if prod:
             c_usd = float(prod.get("cost_usd", 0))
             pct = float(prod.get("profit_pct", 0))
@@ -1035,7 +1037,10 @@ async def _import_one_product(prod_dir: Path, category_id, default_cost_usd, def
 # ---------------- Dashboard ----------------
 @api.get("/dashboard/stats")
 async def dashboard_stats(user=Depends(require_admin)):
-    orders = await db.orders.find({}).to_list(5000)
+    # Solo traemos los campos necesarios para reducir memoria/red.
+    projection = {"_id": 0, "status": 1, "total_pyg": 1, "cost_pyg_snapshot": 1,
+                  "profit_pyg_snapshot": 1, "shipping_cost_pyg": 1, "created_at": 1}
+    orders = await db.orders.find({}, projection).to_list(5000)
     completed = [o for o in orders if o.get("status") == "completado"]
     en_proceso = [o for o in orders if o.get("status") == "en_proceso"]
     en_envio = [o for o in orders if o.get("status") in ("pagado_parcialmente", "en_envio", "arribado")]
