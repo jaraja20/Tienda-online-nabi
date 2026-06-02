@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { fileUrl } from "../lib/api";
 import { NabiLogo } from "./NabiLogo";
 
@@ -6,29 +6,50 @@ import { NabiLogo } from "./NabiLogo";
  * Carrusel autoplay para un slot del hero. Renderiza un layout específico según slot.
  * Si no hay eventos activos, renderiza un fallback hardcodeado (compatibilidad).
  */
-function useCarousel(items, intervalMs = 5500) {
+function useCarousel(itemsLength, intervalMs = 5000) {
   const [idx, setIdx] = useState(0);
-  useEffect(() => { setIdx(0); }, [items.length]);
+  const lenRef = useRef(itemsLength);
+  // mantener un ref con el length actual para que el setInterval lo lea fresco
+  useEffect(() => { lenRef.current = itemsLength; }, [itemsLength]);
+
+  // reset cuando cambia la cantidad
+  useEffect(() => { setIdx(0); }, [itemsLength]);
+
+  // autoplay - setTimeout encadenado (robusto contra throttling de timers)
   useEffect(() => {
-    if (items.length <= 1) return;
-    const t = setInterval(() => setIdx((i) => (i + 1) % items.length), intervalMs);
-    return () => clearInterval(t);
-  }, [items.length, intervalMs]);
+    if (itemsLength <= 1) return undefined;
+    let cancelled = false;
+    let timeoutId = null;
+    const tick = () => {
+      if (cancelled) return;
+      setIdx((i) => (i + 1) % (lenRef.current || 1));
+      timeoutId = setTimeout(tick, intervalMs);
+    };
+    timeoutId = setTimeout(tick, intervalMs);
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [itemsLength, intervalMs]);
+
   return [idx, setIdx];
 }
 
 function CarouselFrame({ items, children, className = "", testid }) {
   // children es una función render(item) → JSX
-  const [idx, setIdx] = useCarousel(items);
+  const [idx, setIdx] = useCarousel(items.length);
   if (!items.length) return null;
   return (
     <div className={`relative w-full h-full overflow-hidden ${className}`} data-testid={testid}>
       <div
         className="absolute inset-0 flex transition-transform duration-700 ease-out"
-        style={{ transform: `translateX(-${idx * 100}%)`, width: `${items.length * 100}%` }}
+        style={{
+          transform: `translateX(-${(100 / items.length) * idx}%)`,
+          width: `${items.length * 100}%`,
+        }}
       >
         {items.map((it, i) => (
-          <div key={it.id || i} className="relative h-full" style={{ width: `${100 / items.length}%` }}>
+          <div key={it.id || i} className="relative h-full shrink-0" style={{ width: `${100 / items.length}%` }}>
             {children(it)}
           </div>
         ))}
