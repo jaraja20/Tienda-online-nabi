@@ -175,16 +175,21 @@ class ProductIn(BaseModel):
     variants: List[ProductVariant] = []
     featured: bool = False
     active: bool = True
+    out_of_stock: bool = False
 
 
 class OrderItem(BaseModel):
-    product_id: str
+    product_id: Optional[str] = None  # null para items manuales
     name: str
     code: Optional[str] = None
     variant_label: Optional[str] = None
     qty: int = 1
-    unit_price_pyg: float = 0
+    unit_price_pyg: float = 0  # precio de venta
     photo: Optional[str] = None
+    # Para pedidos manuales:
+    is_manual: bool = False
+    manual_cost_pyg: float = 0  # costo en PYG
+    manual_description: Optional[str] = None
 
 
 class OrderIn(BaseModel):
@@ -193,6 +198,12 @@ class OrderIn(BaseModel):
     customer_phone: Optional[str] = None
     location: str = "Ciudad del Este"
     notes: Optional[str] = None
+    # Pedidos manuales (admin):
+    source: str = "whatsapp"  # "whatsapp" | "manual"
+    shipping: bool = False
+    shipping_cedula: Optional[str] = None
+    shipping_address: Optional[str] = None
+    shipping_carrier: Optional[str] = None
 
 
 class OrderStatusUpdate(BaseModel):
@@ -729,12 +740,23 @@ async def delete_product(pid: str, user=Depends(require_admin)):
     return {"ok": True}
 
 
+@api.patch("/products/{pid}/stock")
+async def toggle_stock(pid: str, body: dict, user=Depends(require_admin)):
+    out = bool(body.get("out_of_stock"))
+    r = await db.products.update_one({"id": pid}, {"$set": {"out_of_stock": out, "updated_at": now_iso()}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "No encontrado")
+    return {"ok": True, "out_of_stock": out}
+
+
 # ---------------- Orders ----------------
 @api.get("/orders")
-async def list_orders(status: Optional[str] = None, user=Depends(require_admin)):
+async def list_orders(status: Optional[str] = None, source: Optional[str] = None, user=Depends(require_admin)):
     f = {}
     if status:
         f["status"] = status
+    if source:
+        f["source"] = source
     orders = await db.orders.find(f).sort("created_at", -1).to_list(1000)
     return [doc(o) for o in orders]
 
@@ -742,23 +764,33 @@ async def list_orders(status: Optional[str] = None, user=Depends(require_admin))
 @api.post("/orders")
 async def create_order(body: OrderIn):
     items_dump = [i.model_dump() for i in body.items]
+    if not items_dump:
+        raise HTTPException(400, "El pedido necesita al menos un ítem.")
     total = sum(i["qty"] * i["unit_price_pyg"] for i in items_dump)
     cost_total = 0.0
     profit_total = 0.0
     settings_doc = await db.settings.find_one({"id": "app"}) or {}
     rate = float(settings_doc.get("exchange_rate", DEFAULT_USD_RATE))
-    # Compute cost vs profit per item using product data (batch fetch para evitar N+1)
-    product_ids = list({it["product_id"] for it in items_dump})
-    prods = {p["id"]: p async for p in db.products.find({"id": {"$in": product_ids}})}
+
+    # Items linkeados a productos del catálogo (batch fetch)
+    linked_ids = list({it["product_id"] for it in items_dump if it.get("product_id") and not it.get("is_manual")})
+    prods = {p["id"]: p async for p in db.products.find({"id": {"$in": linked_ids}})} if linked_ids else {}
+
     for it in items_dump:
-        prod = prods.get(it["product_id"])
-        if prod:
-            c_usd = float(prod.get("cost_usd", 0))
-            pct = float(prod.get("profit_pct", 0))
-            unit_cost_pyg = c_usd * rate
-            unit_profit_pyg = c_usd * (pct / 100.0) * rate
+        if it.get("is_manual"):
+            unit_cost_pyg = float(it.get("manual_cost_pyg") or 0)
+            unit_sale_pyg = float(it.get("unit_price_pyg") or 0)
             cost_total += unit_cost_pyg * it["qty"]
-            profit_total += unit_profit_pyg * it["qty"]
+            profit_total += (unit_sale_pyg - unit_cost_pyg) * it["qty"]
+        elif it.get("product_id"):
+            prod = prods.get(it["product_id"])
+            if prod:
+                c_usd = float(prod.get("cost_usd", 0))
+                pct = float(prod.get("profit_pct", 0))
+                unit_cost_pyg = c_usd * rate
+                unit_profit_pyg = c_usd * (pct / 100.0) * rate
+                cost_total += unit_cost_pyg * it["qty"]
+                profit_total += unit_profit_pyg * it["qty"]
 
     order = {
         "id": str(uuid.uuid4()),
@@ -767,6 +799,11 @@ async def create_order(body: OrderIn):
         "customer_phone": body.customer_phone,
         "location": body.location,
         "notes": body.notes,
+        "source": body.source or "whatsapp",
+        "shipping": bool(body.shipping),
+        "shipping_cedula": body.shipping_cedula,
+        "shipping_address": body.shipping_address,
+        "shipping_carrier": body.shipping_carrier,
         "total_pyg": total,
         "shipping_cost_pyg": 0,
         "cost_pyg_snapshot": round(cost_total),

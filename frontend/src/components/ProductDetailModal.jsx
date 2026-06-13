@@ -308,11 +308,16 @@ export default function ProductDetailModal({ product, onClose }) {
             </button>
             <button
               onClick={handleAdd}
-              className="flex-1 bg-ink text-white font-bold uppercase tracking-[0.18em] text-xs py-4 hover:bg-nabi-600 transition flex items-center justify-center gap-2"
+              disabled={product.out_of_stock}
+              className={`flex-1 font-bold uppercase tracking-[0.18em] text-xs py-4 transition flex items-center justify-center gap-2 ${
+                product.out_of_stock
+                  ? "bg-zinc-300 text-zinc-500 cursor-not-allowed"
+                  : "bg-ink text-white hover:bg-nabi-600"
+              }`}
               data-testid="add-to-cart-btn"
             >
               <ShoppingBag className="w-4 h-4" />
-              Agregar al carrito
+              {product.out_of_stock ? "Agotado" : "Agregar al carrito"}
             </button>
           </div>
         </div>

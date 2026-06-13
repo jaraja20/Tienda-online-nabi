@@ -10,7 +10,7 @@ import toast from "react-hot-toast";
 const blank = () => ({
   name: "", description: "", code: "", category_id: null, brand: "",
   cost_usd: 0, profit_pct: 40, photos: [], tag_ids: [], variants: [],
-  featured: false, active: true,
+  featured: false, active: true, out_of_stock: false,
 });
 
 export default function ProductsPanel() {
@@ -26,6 +26,17 @@ export default function ProductsPanel() {
     setItems(r.data.items);
   };
   useEffect(() => { load(); }, []);
+
+  const toggleStock = async (p) => {
+    try {
+      await api.patch(`/products/${p.id}/stock`, { out_of_stock: !p.out_of_stock });
+      await load();
+      await refreshProducts();
+      toast.success(p.out_of_stock ? "Producto repuesto" : "Marcado AGOTADO");
+    } catch {
+      toast.error("No se pudo actualizar el stock");
+    }
+  };
 
   const filtered = useMemo(() => items.filter((p) => {
     if (catFilter && p.category_id !== catFilter) return false;
@@ -121,11 +132,25 @@ export default function ProductsPanel() {
                   <td className="p-3 text-right text-zinc-300">{p.profit_pct}%</td>
                   <td className="p-3 text-right font-bold">{formatPYG(p.price_pyg)}</td>
                   <td className="p-3 text-center">
-                    {p.active ? (
-                      <span className="text-[10px] uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-2 py-0.5">Activo</span>
-                    ) : (
-                      <span className="text-[10px] uppercase tracking-wider bg-zinc-700 text-zinc-400 px-2 py-0.5">Oculto</span>
-                    )}
+                    <div className="flex flex-col items-center gap-1">
+                      {p.active ? (
+                        <span className="text-[10px] uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-2 py-0.5">Activo</span>
+                      ) : (
+                        <span className="text-[10px] uppercase tracking-wider bg-zinc-700 text-zinc-400 px-2 py-0.5">Oculto</span>
+                      )}
+                      <button
+                        onClick={() => toggleStock(p)}
+                        className={`text-[10px] uppercase tracking-wider px-2 py-0.5 ${
+                          p.out_of_stock
+                            ? "bg-rose-500/20 text-rose-300 hover:bg-rose-500/30"
+                            : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
+                        }`}
+                        title={p.out_of_stock ? "Marcar disponible" : "Marcar agotado"}
+                        data-testid={`stock-toggle-${p.id}`}
+                      >
+                        {p.out_of_stock ? "Agotado" : "En stock"}
+                      </button>
+                    </div>
                   </td>
                   <td className="p-3 text-right whitespace-nowrap">
                     <button onClick={() => setEditing({ ...p })} className="text-zinc-400 hover:text-white p-1.5" data-testid={`edit-product-${p.id}`}><Pencil className="w-4 h-4"/></button>
@@ -442,6 +467,10 @@ function ProductEditor({ product, categories, tagGroups, tags, rate, onClose, on
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={d.active} onChange={(e) => setD({ ...d, active: e.target.checked })} data-testid="prod-active-checkbox"/>
               Activo (visible en tienda)
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!d.out_of_stock} onChange={(e) => setD({ ...d, out_of_stock: e.target.checked })} data-testid="prod-stock-checkbox"/>
+              Sin stock (mostrar como AGOTADO)
             </label>
           </div>
 

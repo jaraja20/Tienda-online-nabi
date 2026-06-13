@@ -38,6 +38,13 @@ export default function ProductCard({ product, onOpen }) {
             Destacado
           </div>
         )}
+        {product.out_of_stock && (
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center">
+            <span className="bg-ink text-white text-xs uppercase tracking-[0.3em] font-bold px-4 py-2 border-2 border-white">
+              Agotado
+            </span>
+          </div>
+        )}
       </div>
       <div className="pt-3 pb-1">
         {cat && (

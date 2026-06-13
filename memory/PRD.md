@@ -34,3 +34,7 @@ Tienda online (Paraguay) con catálogo, checkout vía WhatsApp y panel admin com
 
 ## Credenciales
 - Admin: `admin` / `Eljaraja20%` (también en `/app/memory/test_credentials.md`)
+
+## Cambios 2026-06-13
+- `feat`: **Pedidos manuales** (admin) — nueva pestaña "Pedidos Manuales" en `Orders` panel. Permite cargar pedidos de SHEIN no listados en el catálogo. Cada item lleva: nombre, código, cantidad, costo, venta, descripción, foto de referencia. Si "Envío" está activo, pide cédula + dirección + transportadora. Se persiste con `source="manual"` en la misma colección `orders`. Aparecen en dashboard y stats junto a los de WhatsApp.
+- `feat`: **Sin stock** (productos) — campo `out_of_stock: bool` en `ProductIn`. Endpoint `PATCH /api/products/{id}/stock` para toggle rápido. En la tienda: el card muestra overlay "AGOTADO" y el botón "Agregar al carrito" queda deshabilitado.
