@@ -314,7 +314,7 @@ function Row({ k, v }) {
 
 // ---------------- Modal de pedido manual ----------------
 function blankItem() {
-  return { name: "", code: "", qty: 1, unit_price_pyg: "", manual_cost_pyg: "", manual_description: "", photo: "" };
+  return { name: "", code: "", qty: 1, unit_price_pyg: "", manual_cost: "", manual_cost_currency: "PYG", manual_description: "", photo: "" };
 }
 
 function ManualOrderModal({ open, onClose, onCreated }) {
@@ -322,38 +322,95 @@ function ManualOrderModal({ open, onClose, onCreated }) {
   const [shipping, setShipping] = useState({ enabled: false, cedula: "", address: "", carrier: "" });
   const [items, setItems] = useState([blankItem()]);
   const [notes, setNotes] = useState("");
+  const [totalOverride, setTotalOverride] = useState(""); // precio venta total opcional
   const [saving, setSaving] = useState(false);
   const [pickerForIdx, setPickerForIdx] = useState(null);
+  const [rate, setRate] = useState(7800);
+
+  // Cargar exchange rate
+  useEffect(() => {
+    if (!open) return;
+    api.get("/settings").then((r) => {
+      const er = Number(r.data?.exchange_rate);
+      if (er > 0) setRate(er);
+    }).catch(() => {});
+  }, [open]);
 
   const reset = () => {
     setCustomer({ name: "", phone: "" });
     setShipping({ enabled: false, cedula: "", address: "", carrier: "" });
     setItems([blankItem()]);
     setNotes("");
+    setTotalOverride("");
   };
 
   const updateItem = (idx, patch) => setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const removeItem = (idx) => setItems((arr) => arr.length > 1 ? arr.filter((_, i) => i !== idx) : arr);
 
-  const total = items.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.unit_price_pyg) || 0), 0);
-  const costTotal = items.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.manual_cost_pyg) || 0), 0);
+  // Helper: convierte costo del item a PYG según moneda elegida
+  const itemCostPyg = (it) => {
+    const v = Number(it.manual_cost) || 0;
+    return it.manual_cost_currency === "USD" ? v * rate : v;
+  };
+
+  const sumItemPrices = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unit_price_pyg) || 0), 0);
+  const overrideNum = Number(totalOverride) || 0;
+  const total = overrideNum > 0 ? overrideNum : sumItemPrices;
+  const costTotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * itemCostPyg(it), 0);
   const profitTotal = total - costTotal;
 
   const onUploadPhoto = async (idx, e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const fd = new FormData();
-    fd.append("file", f);
-    const r = await api.post("/uploads", fd, { headers: { "Content-Type": "multipart/form-data" } });
-    updateItem(idx, { photo: r.data.url });
+    try {
+      const fd = new FormData();
+      fd.append("files", f);
+      fd.append("path", "/manuales");
+      const r = await api.post("/files/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const url = r.data?.saved?.[0]?.url;
+      if (url) {
+        updateItem(idx, { photo: url });
+        toast.success("Imagen subida");
+      } else {
+        toast.error("La subida no retornó URL");
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Error al subir imagen");
+    } finally {
+      // limpiar input para permitir re-upload del mismo archivo
+      try { e.target.value = ""; } catch { /* noop */ }
+    }
   };
 
   const submit = async () => {
     if (!customer.name.trim()) return toast.error("Falta nombre del cliente");
-    const validItems = items.filter((it) => it.name.trim() && Number(it.unit_price_pyg) > 0);
-    if (!validItems.length) return toast.error("Agregá al menos un producto con nombre y precio de venta");
+    const validItems = items.filter((it) => it.name.trim());
+    if (!validItems.length) return toast.error("Agregá al menos un producto con nombre");
+
     setSaving(true);
     try {
+      const itemsPayload = validItems.map((it) => ({
+        name: it.name.trim(),
+        code: it.code || null,
+        qty: Number(it.qty) || 1,
+        unit_price_pyg: Number(it.unit_price_pyg) || 0,
+        is_manual: true,
+        manual_cost_pyg: itemCostPyg(it),
+        manual_description: it.manual_description || null,
+        photo: it.photo || null,
+      }));
+
+      // Si el usuario puso un total y los items no tienen precio, distribuir el total entre los items
+      // (para que cada item tenga un unit_price_pyg coherente y los reportes funcionen)
+      if (overrideNum > 0) {
+        const totalQty = itemsPayload.reduce((s, it) => s + it.qty, 0) || 1;
+        const perUnit = overrideNum / totalQty;
+        // solo override si NINGÚN item tenía precio (es decir, sumItemPrices === 0)
+        if (sumItemPrices === 0) {
+          itemsPayload.forEach((it) => { it.unit_price_pyg = Math.round(perUnit); });
+        }
+      }
+
       const payload = {
         customer_name: customer.name.trim(),
         customer_phone: customer.phone.trim() || null,
@@ -364,16 +421,9 @@ function ManualOrderModal({ open, onClose, onCreated }) {
         shipping_cedula: shipping.enabled ? shipping.cedula || null : null,
         shipping_address: shipping.enabled ? shipping.address || null : null,
         shipping_carrier: shipping.enabled ? shipping.carrier || null : null,
-        items: validItems.map((it) => ({
-          name: it.name.trim(),
-          code: it.code || null,
-          qty: Number(it.qty) || 1,
-          unit_price_pyg: Number(it.unit_price_pyg) || 0,
-          is_manual: true,
-          manual_cost_pyg: Number(it.manual_cost_pyg) || 0,
-          manual_description: it.manual_description || null,
-          photo: it.photo || null,
-        })),
+        items: itemsPayload,
+        // Si el total override es mayor al sum, lo enviamos como override
+        manual_total_pyg: overrideNum > 0 ? overrideNum : null,
       };
       const r = await api.post("/orders", payload);
       toast.success("Pedido manual creado");
@@ -426,7 +476,9 @@ function ManualOrderModal({ open, onClose, onCreated }) {
         {/* Items */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <div className="text-[10px] uppercase tracking-[0.25em] font-bold text-zinc-500">Productos</div>
+            <div className="text-[10px] uppercase tracking-[0.25em] font-bold text-zinc-500">
+              Productos <span className="text-zinc-600 normal-case">· tasa: 1 USD = {formatPYG(rate)}</span>
+            </div>
             <Btn variant="ghost" onClick={() => setItems((arr) => [...arr, blankItem()])} data-testid="mo-add-item">
               <Plus className="w-3 h-3 inline mr-1"/>Agregar producto
             </Btn>
@@ -455,14 +507,56 @@ function ManualOrderModal({ open, onClose, onCreated }) {
                     <Label>Cantidad</Label>
                     <Input type="number" min="1" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} data-testid={`mo-item-qty-${i}`}/>
                   </div>
-                  <div>
-                    <Label>Precio costo (₲) *</Label>
-                    <Input type="number" value={it.manual_cost_pyg} onChange={(e) => updateItem(i, { manual_cost_pyg: e.target.value })} placeholder="0" data-testid={`mo-item-cost-${i}`}/>
+
+                  {/* Costo con selector USD/PYG */}
+                  <div className="sm:col-span-2">
+                    <Label>Precio costo *</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={it.manual_cost}
+                        onChange={(e) => updateItem(i, { manual_cost: e.target.value })}
+                        placeholder="0"
+                        className="flex-1"
+                        data-testid={`mo-item-cost-${i}`}
+                      />
+                      <div className="flex">
+                        {["PYG", "USD"].map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => updateItem(i, { manual_cost_currency: c })}
+                            className={`px-3 text-xs font-bold uppercase border ${
+                              it.manual_cost_currency === c
+                                ? "bg-nabi-500 text-white border-nabi-500"
+                                : "bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-white"
+                            }`}
+                            data-testid={`mo-item-cost-curr-${i}-${c.toLowerCase()}`}
+                          >
+                            {c === "PYG" ? "₲" : "USD"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {it.manual_cost_currency === "USD" && Number(it.manual_cost) > 0 && (
+                      <div className="text-[10px] text-zinc-500 mt-1">
+                        ≈ {formatPYG(Number(it.manual_cost) * rate)} cada uno
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <Label>Precio venta (₲) *</Label>
-                    <Input type="number" value={it.unit_price_pyg} onChange={(e) => updateItem(i, { unit_price_pyg: e.target.value })} placeholder="0" data-testid={`mo-item-sale-${i}`}/>
+
+                  <div className="sm:col-span-2">
+                    <Label>Precio venta unitario (opcional) <span className="text-zinc-500 normal-case">— dejar vacío si se vende por lote</span></Label>
+                    <Input
+                      type="number"
+                      value={it.unit_price_pyg}
+                      onChange={(e) => updateItem(i, { unit_price_pyg: e.target.value })}
+                      placeholder="0"
+                      data-testid={`mo-item-sale-${i}`}
+                    />
                   </div>
+
                   <div className="sm:col-span-2">
                     <Label>Descripción / notas (opcional)</Label>
                     <Input value={it.manual_description} onChange={(e) => updateItem(i, { manual_description: e.target.value })} placeholder="Talle, color, observaciones..." data-testid={`mo-item-desc-${i}`}/>
@@ -470,8 +564,8 @@ function ManualOrderModal({ open, onClose, onCreated }) {
                   <div className="sm:col-span-2">
                     <Label>Imagen de referencia</Label>
                     <div className="flex gap-2 items-start">
-                      <div className="w-20 h-20 bg-zinc-800 shrink-0 overflow-hidden">
-                        {it.photo ? <img src={fileUrl(it.photo)} alt="" className="w-full h-full object-cover"/> : <ShoppingBag className="w-6 h-6 text-zinc-600 m-auto mt-7"/>}
+                      <div className="w-20 h-20 bg-zinc-800 shrink-0 overflow-hidden flex items-center justify-center">
+                        {it.photo ? <img src={fileUrl(it.photo)} alt="" className="w-full h-full object-cover"/> : <ShoppingBag className="w-6 h-6 text-zinc-600"/>}
                       </div>
                       <div className="flex flex-col gap-1">
                         <label className="text-[10px] uppercase tracking-wider text-nabi-300 hover:text-nabi-200 cursor-pointer border border-nabi-700 px-2 py-1">
@@ -495,6 +589,21 @@ function ManualOrderModal({ open, onClose, onCreated }) {
           </div>
         </div>
 
+        {/* Precio total del pedido (opcional - override) */}
+        <div className="border border-nabi-700/40 bg-nabi-900/10 p-3">
+          <Label>Precio venta TOTAL del pedido (opcional)</Label>
+          <Input
+            type="number"
+            value={totalOverride}
+            onChange={(e) => setTotalOverride(e.target.value)}
+            placeholder="Si lo dejás vacío, se calcula sumando precios unitarios"
+            data-testid="mo-total-override"
+          />
+          <div className="text-[11px] text-zinc-500 mt-1">
+            Útil si vendés el lote completo por un único precio y no querés calcular el unitario.
+          </div>
+        </div>
+
         {/* Notas y resumen */}
         <div>
           <Label>Nota interna (opcional)</Label>
@@ -502,9 +611,12 @@ function ManualOrderModal({ open, onClose, onCreated }) {
         </div>
 
         <div className="bg-zinc-950 border border-zinc-800 p-3 text-sm space-y-1">
-          <div className="flex justify-between"><span className="text-zinc-400">Total venta</span><span className="font-bold">{formatPYG(total)}</span></div>
+          <div className="flex justify-between">
+            <span className="text-zinc-400">Total venta {overrideNum > 0 ? "(override)" : ""}</span>
+            <span className="font-bold">{formatPYG(total)}</span>
+          </div>
           <div className="flex justify-between"><span className="text-zinc-400">Costo total</span><span>{formatPYG(costTotal)}</span></div>
-          <div className="flex justify-between"><span className="text-zinc-400">Ganancia</span><span className="text-emerald-400 font-bold">{formatPYG(profitTotal)}</span></div>
+          <div className="flex justify-between"><span className="text-zinc-400">Ganancia</span><span className={`font-bold ${profitTotal >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{formatPYG(profitTotal)}</span></div>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">

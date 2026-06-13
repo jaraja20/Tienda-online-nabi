@@ -204,6 +204,9 @@ class OrderIn(BaseModel):
     shipping_cedula: Optional[str] = None
     shipping_address: Optional[str] = None
     shipping_carrier: Optional[str] = None
+    # Si el admin vende por lote y no quiere calcular el precio unitario,
+    # puede sobreescribir el total del pedido:
+    manual_total_pyg: Optional[float] = None
 
 
 class OrderStatusUpdate(BaseModel):
@@ -766,7 +769,9 @@ async def create_order(body: OrderIn):
     items_dump = [i.model_dump() for i in body.items]
     if not items_dump:
         raise HTTPException(400, "El pedido necesita al menos un ítem.")
-    total = sum(i["qty"] * i["unit_price_pyg"] for i in items_dump)
+    sum_items = sum(i["qty"] * i["unit_price_pyg"] for i in items_dump)
+    # Si el admin envió un total override (pedido manual por lote), úsalo
+    total = float(body.manual_total_pyg) if body.manual_total_pyg and body.manual_total_pyg > 0 else sum_items
     cost_total = 0.0
     profit_total = 0.0
     settings_doc = await db.settings.find_one({"id": "app"}) or {}
@@ -791,6 +796,10 @@ async def create_order(body: OrderIn):
                 unit_profit_pyg = c_usd * (pct / 100.0) * rate
                 cost_total += unit_cost_pyg * it["qty"]
                 profit_total += unit_profit_pyg * it["qty"]
+
+    # Si hay override del total (venta por lote), recalcular profit = total - costo
+    if body.manual_total_pyg and body.manual_total_pyg > 0:
+        profit_total = total - cost_total
 
     order = {
         "id": str(uuid.uuid4()),
