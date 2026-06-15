@@ -1081,51 +1081,105 @@ async def _import_one_product(prod_dir: Path, category_id, default_cost_usd, def
 
 
 # ---------------- Dashboard ----------------
+# Reglas de cash flow:
+#  - en_proceso     -> 0% cobrado (todavía no pagó)
+#  - pagado_parcial -> 50% cobrado
+#  - en_envio       -> 50% cobrado
+#  - arribado       -> 50% cobrado
+#  - completado     -> 100% cobrado
+#  - cancelado      -> no entra al cálculo
+PAID_RATIO = {
+    "en_proceso": 0.0,
+    "pagado_parcialmente": 0.5,
+    "en_envio": 0.5,
+    "arribado": 0.5,
+    "completado": 1.0,
+}
+
+
 @api.get("/dashboard/stats")
 async def dashboard_stats(user=Depends(require_admin)):
     # Solo traemos los campos necesarios para reducir memoria/red.
     projection = {"_id": 0, "status": 1, "total_pyg": 1, "cost_pyg_snapshot": 1,
-                  "profit_pyg_snapshot": 1, "shipping_cost_pyg": 1, "created_at": 1}
+                  "profit_pyg_snapshot": 1, "shipping_cost_pyg": 1, "created_at": 1,
+                  "source": 1}
     orders = await db.orders.find({}, projection).to_list(5000)
+    active = [o for o in orders if o.get("status") != "cancelado"]
     completed = [o for o in orders if o.get("status") == "completado"]
     en_proceso = [o for o in orders if o.get("status") == "en_proceso"]
     en_envio = [o for o in orders if o.get("status") in ("pagado_parcialmente", "en_envio", "arribado")]
     cancelados = [o for o in orders if o.get("status") == "cancelado"]
 
-    revenue = sum(o.get("total_pyg", 0) for o in completed)
-    cost = sum(o.get("cost_pyg_snapshot", 0) for o in completed)
-    profit = sum(o.get("profit_pyg_snapshot", 0) for o in completed)
-    shipping = sum(o.get("shipping_cost_pyg", 0) for o in completed)
+    # Totales por estado de pago
+    realized = 0.0   # cash cobrado (señal 50% o 100% si completado)
+    pending = 0.0    # cash por cobrar (50% restante)
+    cost_total = 0.0
+    revenue_total = 0.0  # ventas totales esperadas (todos los activos)
 
-    # By month chart
+    for o in active:
+        total = float(o.get("total_pyg", 0) or 0)
+        cost = float(o.get("cost_pyg_snapshot", 0) or 0)
+        ratio = PAID_RATIO.get(o.get("status", ""), 0.0)
+        realized += total * ratio
+        pending += total * (1 - ratio)
+        cost_total += cost
+        revenue_total += total
+
+    net_profit = realized - cost_total  # ganancia neta hasta el momento
+    expected_profit = revenue_total - cost_total  # ganancia total esperada al completar todos
+    shipping = sum(float(o.get("shipping_cost_pyg", 0) or 0) for o in active)
+
+    # Chart por mes (todos los pedidos activos, no solo completados)
     by_month: dict = {}
-    for o in completed:
+    for o in active:
         ts = o.get("created_at", "")[:7]
         if not ts:
             continue
-        agg = by_month.setdefault(ts, {"month": ts, "revenue": 0, "cost": 0, "profit": 0})
-        agg["revenue"] += o.get("total_pyg", 0)
-        agg["cost"] += o.get("cost_pyg_snapshot", 0)
-        agg["profit"] += o.get("profit_pyg_snapshot", 0)
+        total = float(o.get("total_pyg", 0) or 0)
+        cost = float(o.get("cost_pyg_snapshot", 0) or 0)
+        ratio = PAID_RATIO.get(o.get("status", ""), 0.0)
+        agg = by_month.setdefault(ts, {"month": ts, "revenue": 0, "cost": 0, "profit": 0, "realized": 0})
+        agg["revenue"] += total
+        agg["cost"] += cost
+        agg["profit"] += total - cost
+        agg["realized"] += total * ratio
     months = sorted(by_month.values(), key=lambda x: x["month"])
 
     products_count = await db.products.count_documents({})
     active_products = await db.products.count_documents({"active": True})
 
+    # Desglose por origen
+    by_source = {"whatsapp": {"orders": 0, "realized": 0, "pending": 0},
+                 "manual": {"orders": 0, "realized": 0, "pending": 0}}
+    for o in active:
+        src = o.get("source") or "whatsapp"
+        if src not in by_source:
+            by_source[src] = {"orders": 0, "realized": 0, "pending": 0}
+        total = float(o.get("total_pyg", 0) or 0)
+        ratio = PAID_RATIO.get(o.get("status", ""), 0.0)
+        by_source[src]["orders"] += 1
+        by_source[src]["realized"] += total * ratio
+        by_source[src]["pending"] += total * (1 - ratio)
+
     return {
         "orders": {
             "total": len(orders),
+            "active": len(active),
             "en_proceso": len(en_proceso),
             "en_envio": len(en_envio),
             "completados": len(completed),
             "cancelados": len(cancelados),
         },
         "money": {
-            "revenue": revenue,
-            "cost": cost,
-            "profit": profit,
+            "revenue": revenue_total,        # ventas totales (esperado)
+            "realized": realized,             # cobrado (50% pagado + 100% completado)
+            "pending": pending,               # por cobrar
+            "cost": cost_total,               # gastos / costos
+            "profit": net_profit,             # ganancia neta realizada (realized - cost)
+            "expected_profit": expected_profit,  # ganancia total esperada
             "shipping": shipping,
         },
+        "by_source": by_source,
         "products": {
             "total": products_count,
             "active": active_products,

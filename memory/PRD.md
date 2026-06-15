@@ -38,3 +38,16 @@ Tienda online (Paraguay) con catálogo, checkout vía WhatsApp y panel admin com
 ## Cambios 2026-06-13
 - `feat`: **Pedidos manuales** (admin) — nueva pestaña "Pedidos Manuales" en `Orders` panel. Permite cargar pedidos de SHEIN no listados en el catálogo. Cada item lleva: nombre, código, cantidad, costo, venta, descripción, foto de referencia. Si "Envío" está activo, pide cédula + dirección + transportadora. Se persiste con `source="manual"` en la misma colección `orders`. Aparecen en dashboard y stats junto a los de WhatsApp.
 - `feat`: **Sin stock** (productos) — campo `out_of_stock: bool` en `ProductIn`. Endpoint `PATCH /api/products/{id}/stock` para toggle rápido. En la tienda: el card muestra overlay "AGOTADO" y el botón "Agregar al carrito" queda deshabilitado.
+
+## Cambios 2026-06-13 (v2)
+- `fix`: **Dashboard ahora incluye TODOS los pedidos activos** (no solo completados). Antes los pedidos en `en_envio` / `pagado_parcialmente` / `arribado` no se sumaban en el dashboard.
+- `feat`: **Cash flow realista** en dashboard:
+  - **Ganancia realizada** = seña 50% de pedidos en curso + 100% de los completados.
+  - **Ganancia no realizada** = 50% restante por cobrar.
+  - **Gastos** = suma de costos de todos los pedidos activos (no cancelados).
+  - **Ganancia neta** = realizado − gastos.
+- `feat`: **Desglose por origen** (WhatsApp vs Manuales) en dashboard.
+- `feat`: **Chart mensual** ahora muestra Realizado vs Ventas totales vs Costo (no solo completados).
+- `fix`: subida de imagen en pedido manual usaba endpoint incorrecto (`/uploads` → `/files/upload`, campo `files`).
+- `feat`: costo en pedido manual con selector USD/₲ (conversión automática usando exchange_rate).
+- `feat`: precio venta unitario es OPCIONAL; nuevo campo "Precio venta TOTAL del pedido" para venta por lote.
