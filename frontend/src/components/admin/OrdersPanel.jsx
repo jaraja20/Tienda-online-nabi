@@ -352,7 +352,6 @@ function ManualOrderModal({ open, onClose, onCreated, existing = null }) {
   // Si es edición, pre-cargar campos del pedido existente
   useEffect(() => {
     if (!open) return;
-    /* eslint-disable react-hooks/set-state-in-effect */
     if (existing) {
       setCustomer({ name: existing.customer_name || "", phone: existing.customer_phone || "" });
       setShipping({
@@ -380,7 +379,6 @@ function ManualOrderModal({ open, onClose, onCreated, existing = null }) {
       setNotes("");
       setTotalOverride("");
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [open, existing]);
 
   const reset = () => {
