@@ -846,6 +846,74 @@ async def update_order_status(oid: str, body: OrderStatusUpdate, user=Depends(re
     return doc(o)
 
 
+@api.patch("/orders/{oid}")
+async def edit_order(oid: str, body: OrderIn, user=Depends(require_admin)):
+    """Edición completa de un pedido (cliente, envío, items, etc.).
+    Recalcula totales, costos y ganancia. Mantiene status e historial."""
+    order = await db.orders.find_one({"id": oid})
+    if not order:
+        raise HTTPException(404, "Pedido no encontrado")
+
+    items_dump = [i.model_dump() for i in body.items]
+    if not items_dump:
+        raise HTTPException(400, "El pedido necesita al menos un ítem.")
+    sum_items = sum(i["qty"] * i["unit_price_pyg"] for i in items_dump)
+    total = float(body.manual_total_pyg) if body.manual_total_pyg and body.manual_total_pyg > 0 else sum_items
+    cost_total = 0.0
+    profit_total = 0.0
+    settings_doc = await db.settings.find_one({"id": "app"}) or {}
+    rate = float(settings_doc.get("exchange_rate", DEFAULT_USD_RATE))
+
+    linked_ids = list({it["product_id"] for it in items_dump if it.get("product_id") and not it.get("is_manual")})
+    prods = {p["id"]: p async for p in db.products.find({"id": {"$in": linked_ids}})} if linked_ids else {}
+
+    for it in items_dump:
+        if it.get("is_manual"):
+            unit_cost_pyg = float(it.get("manual_cost_pyg") or 0)
+            unit_sale_pyg = float(it.get("unit_price_pyg") or 0)
+            cost_total += unit_cost_pyg * it["qty"]
+            profit_total += (unit_sale_pyg - unit_cost_pyg) * it["qty"]
+        elif it.get("product_id"):
+            prod = prods.get(it["product_id"])
+            if prod:
+                c_usd = float(prod.get("cost_usd", 0))
+                pct = float(prod.get("profit_pct", 0))
+                unit_cost_pyg = c_usd * rate
+                unit_profit_pyg = c_usd * (pct / 100.0) * rate
+                cost_total += unit_cost_pyg * it["qty"]
+                profit_total += unit_profit_pyg * it["qty"]
+
+    if body.manual_total_pyg and body.manual_total_pyg > 0:
+        profit_total = total - cost_total
+
+    # Conservar flete previo y sumarlo al total
+    shipping_cost_prev = float(order.get("shipping_cost_pyg", 0) or 0)
+    total_with_shipping = total + shipping_cost_prev
+
+    upd = {
+        "items": items_dump,
+        "customer_name": body.customer_name,
+        "customer_phone": body.customer_phone,
+        "location": body.location,
+        "notes": body.notes,
+        "source": body.source or order.get("source", "whatsapp"),
+        "shipping": bool(body.shipping),
+        "shipping_cedula": body.shipping_cedula,
+        "shipping_address": body.shipping_address,
+        "shipping_carrier": body.shipping_carrier,
+        "total_pyg": total_with_shipping,
+        "cost_pyg_snapshot": round(cost_total),
+        "profit_pyg_snapshot": round(profit_total),
+        "updated_at": now_iso(),
+    }
+    history = order.get("status_history", [])
+    history.append({"status": order.get("status"), "at": now_iso(), "note": "Pedido editado"})
+    upd["status_history"] = history
+    await db.orders.update_one({"id": oid}, {"$set": upd})
+    o = await db.orders.find_one({"id": oid})
+    return doc(o)
+
+
 @api.delete("/orders/{oid}")
 async def delete_order(oid: str, user=Depends(require_admin)):
     await db.orders.delete_one({"id": oid})

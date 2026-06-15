@@ -3,7 +3,7 @@ import { api, fileUrl } from "../../lib/api";
 import { PageHeader, Btn, Card, Input, Label, Modal, Select } from "./AdminUI";
 import { STATE_LABELS, STATE_COLORS, formatPYG } from "../../lib/utils";
 import {
-  MessageCircle, Truck, XCircle, ChevronRight, Plus, Trash2, FolderOpen, ShoppingBag, Edit3,
+  MessageCircle, Truck, XCircle, ChevronRight, Plus, Trash2, FolderOpen, ShoppingBag, Edit3, Pencil,
 } from "lucide-react";
 import FilePickerModal from "./FilePickerModal";
 import toast from "react-hot-toast";
@@ -22,6 +22,7 @@ export default function OrdersPanel() {
   const [shippingCost, setShippingCost] = useState("");
   const [note, setNote] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
 
   const load = async () => {
     const params = { source: tab };
@@ -149,6 +150,7 @@ export default function OrdersPanel() {
               onUpdate={updateStatus}
               onCancel={cancelOrder}
               onDelete={() => deleteOrder(selected)}
+              onEdit={() => setEditingOrder(selected)}
               updating={updating}
               shippingCost={shippingCost}
               setShippingCost={setShippingCost}
@@ -164,6 +166,13 @@ export default function OrdersPanel() {
         onClose={() => setShowCreate(false)}
         onCreated={(o) => { load(); setSelected(o); setShowCreate(false); }}
       />
+
+      <ManualOrderModal
+        open={!!editingOrder}
+        existing={editingOrder}
+        onClose={() => setEditingOrder(null)}
+        onCreated={(o) => { load(); setSelected(o); setEditingOrder(null); }}
+      />
     </div>
   );
 }
@@ -177,7 +186,7 @@ const NEXT_STATE = {
   cancelado: null,
 };
 
-function OrderDetail({ order, onUpdate, onCancel, onDelete, updating, shippingCost, setShippingCost, note, setNote }) {
+function OrderDetail({ order, onUpdate, onCancel, onDelete, onEdit, updating, shippingCost, setShippingCost, note, setNote }) {
   const next = NEXT_STATE[order.status];
   return (
     <Card className="p-5" data-testid={`order-detail-${order.id}`}>
@@ -272,6 +281,9 @@ function OrderDetail({ order, onUpdate, onCancel, onDelete, updating, shippingCo
             <ChevronRight className="w-3 h-3 inline mr-1"/>Avanzar a: {STATE_LABELS[next]}
           </Btn>
         )}
+        <Btn variant="ghost" onClick={onEdit} data-testid="edit-order-btn">
+          <Pencil className="w-3 h-3 inline mr-1"/>Editar
+        </Btn>
         {order.status !== "cancelado" && order.status !== "completado" && (
           <Btn onClick={onCancel} variant="danger" disabled={updating} data-testid="cancel-order-btn">
             <XCircle className="w-3 h-3 inline mr-1"/>Cancelar
@@ -317,7 +329,8 @@ function blankItem() {
   return { name: "", code: "", qty: 1, unit_price_pyg: "", manual_cost: "", manual_cost_currency: "PYG", manual_description: "", photo: "" };
 }
 
-function ManualOrderModal({ open, onClose, onCreated }) {
+function ManualOrderModal({ open, onClose, onCreated, existing = null }) {
+  const isEdit = !!existing;
   const [customer, setCustomer] = useState({ name: "", phone: "" });
   const [shipping, setShipping] = useState({ enabled: false, cedula: "", address: "", carrier: "" });
   const [items, setItems] = useState([blankItem()]);
@@ -335,6 +348,40 @@ function ManualOrderModal({ open, onClose, onCreated }) {
       if (er > 0) setRate(er);
     }).catch(() => {});
   }, [open]);
+
+  // Si es edición, pre-cargar campos del pedido existente
+  useEffect(() => {
+    if (!open) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (existing) {
+      setCustomer({ name: existing.customer_name || "", phone: existing.customer_phone || "" });
+      setShipping({
+        enabled: !!existing.shipping,
+        cedula: existing.shipping_cedula || "",
+        address: existing.shipping_address || "",
+        carrier: existing.shipping_carrier || "",
+      });
+      setItems((existing.items || []).map((it) => ({
+        name: it.name || "",
+        code: it.code || "",
+        qty: it.qty || 1,
+        unit_price_pyg: it.unit_price_pyg || "",
+        manual_cost: it.manual_cost_pyg || "",
+        manual_cost_currency: "PYG",
+        manual_description: it.manual_description || it.variant_label || "",
+        photo: it.photo || "",
+      })));
+      setNotes(existing.notes || "");
+      setTotalOverride("");
+    } else {
+      setCustomer({ name: "", phone: "" });
+      setShipping({ enabled: false, cedula: "", address: "", carrier: "" });
+      setItems([blankItem()]);
+      setNotes("");
+      setTotalOverride("");
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [open, existing]);
 
   const reset = () => {
     setCustomer({ name: "", phone: "" });
@@ -414,9 +461,9 @@ function ManualOrderModal({ open, onClose, onCreated }) {
       const payload = {
         customer_name: customer.name.trim(),
         customer_phone: customer.phone.trim() || null,
-        location: shipping.enabled ? "Envío" : "Ciudad del Este",
+        location: shipping.enabled ? "Envío" : (existing?.location || "Ciudad del Este"),
         notes: notes || null,
-        source: "manual",
+        source: existing?.source || "manual",
         shipping: shipping.enabled,
         shipping_cedula: shipping.enabled ? shipping.cedula || null : null,
         shipping_address: shipping.enabled ? shipping.address || null : null,
@@ -425,8 +472,10 @@ function ManualOrderModal({ open, onClose, onCreated }) {
         // Si el total override es mayor al sum, lo enviamos como override
         manual_total_pyg: overrideNum > 0 ? overrideNum : null,
       };
-      const r = await api.post("/orders", payload);
-      toast.success("Pedido manual creado");
+      const r = isEdit
+        ? await api.patch(`/orders/${existing.id}`, payload)
+        : await api.post("/orders", payload);
+      toast.success(isEdit ? "Pedido actualizado" : "Pedido manual creado");
       reset();
       onCreated?.(r.data);
     } catch (err) {
@@ -435,7 +484,7 @@ function ManualOrderModal({ open, onClose, onCreated }) {
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Nuevo pedido manual" size="lg">
+    <Modal open={open} onClose={onClose} title={isEdit ? "Editar pedido" : "Nuevo pedido manual"} size="lg">
       <div className="space-y-5">
         {/* Cliente */}
         <div className="grid sm:grid-cols-2 gap-3">
@@ -621,7 +670,7 @@ function ManualOrderModal({ open, onClose, onCreated }) {
 
         <div className="flex justify-end gap-2 pt-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn onClick={submit} disabled={saving} data-testid="mo-submit">{saving ? "Creando..." : "Crear pedido"}</Btn>
+          <Btn onClick={submit} disabled={saving} data-testid="mo-submit">{saving ? (isEdit ? "Guardando..." : "Creando...") : (isEdit ? "Guardar cambios" : "Crear pedido")}</Btn>
         </div>
       </div>
 
